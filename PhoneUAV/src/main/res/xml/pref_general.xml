@@ -1,0 +1,111 @@
+<PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <EditTextPreference
+        android:capitalize="words"
+        android:defaultValue="3"
+        android:inputType="number"
+        android:key="period"
+        android:maxLines="1"
+        android:selectAllOnFocus="true"
+        android:singleLine="true"
+        android:title="@string/pref_period_title" />
+
+    <EditTextPreference
+        android:capitalize="words"
+        android:defaultValue="0"
+        android:inputType="number"
+        android:key="orientation"
+        android:maxLines="1"
+        android:selectAllOnFocus="true"
+        android:singleLine="true"
+        android:title="@string/pref_title_orientation" />
+
+    <ListPreference
+        android:defaultValue="1"
+        android:entries="@array/pref_camera_list_titles"
+        android:entryValues="@array/pref_camera_list_values"
+        android:key="camera-facing"
+        android:negativeButtonText="@null"
+        android:positiveButtonText="@null"
+        android:title="@string/pref_title_camera_facing" />
+
+    <EditTextPreference
+        android:capitalize="words"
+        android:inputType="text"
+        android:key="outputs-aileron"
+        android:maxLines="1"
+        android:maxLength="8"
+        android:selectAllOnFocus="true"
+        android:singleLine="true"
+        android:title="outputs aileron" />
+
+    <EditTextPreference
+        android:capitalize="words"
+        android:inputType="text"
+        android:key="outputs-elevator"
+        android:maxLines="1"
+        android:maxLength="8"
+        android:selectAllOnFocus="true"
+        android:singleLine="true"
+        android:title="outputs elevator" />
+
+    <EditTextPreference
+        android:capitalize="words"
+        android:inputType="text"
+        android:key="outputs-throttle"
+        android:maxLines="1"
+        android:maxLength="8"
+        android:selectAllOnFocus="true"
+        android:singleLine="true"
+        android:title="outputs throttle" />
+
+    <EditTextPreference
+        android:capitalize="words"
+        android:inputType="text"
+        android:key="outputs-rudder"
+        android:maxLines="1"
+        android:maxLength="8"
+        android:selectAllOnFocus="true"
+        android:singleLine="true"
+        android:title="outputs rudder" />
+
+    <EditTextPreference
+        android:capitalize="words"
+        android:inputType="text"
+        android:key="outputs-elevon-left"
+        android:maxLines="1"
+        android:maxLength="8"
+        android:selectAllOnFocus="true"
+        android:singleLine="true"
+        android:title="outputs elevon left" />
+
+    <EditTextPreference
+        android:capitalize="words"
+        android:inputType="text"
+        android:key="outputs-elevon-right"
+        android:maxLines="1"
+        android:maxLength="8"
+        android:selectAllOnFocus="true"
+        android:singleLine="true"
+        android:title="outputs elevon right" />
+
+    <EditTextPreference
+        android:capitalize="words"
+        android:inputType="number"
+        android:key="throttle-min"
+        android:defaultValue="500"
+        android:maxLines="1"
+        android:selectAllOnFocus="true"
+        android:singleLine="true"
+        android:title="@string/pref_title_throttle_min" />
+
+    <EditTextPreference
+        android:capitalize="words"
+        android:inputType="number"
+        android:key="throttle-max"
+        android:defaultValue="2500"
+        android:maxLines="1"
+        android:selectAllOnFocus="true"
+        android:singleLine="true"
+        android:title="@string/pref_title_throttle_max" />
+</PreferenceScreen>
