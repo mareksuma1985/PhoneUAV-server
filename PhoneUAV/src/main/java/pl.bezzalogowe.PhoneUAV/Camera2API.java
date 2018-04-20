@@ -438,18 +438,16 @@ public class Camera2API implements SurfaceTextureListener {
         mMediaRecorder.prepare();
     }
 
-    /** https://developer.android.com/reference/android/hardware/camera2/CaptureRequest.html#FLASH_MODE */
+    /** https://stackoverflow.com/questions/34093508/toggle-flashlight-in-camera2-without-interrupting-preview */
     public void turnOnTorch() {
         /** activates torch if it is off */
-        //FIXME: It's not working
+        //FIXME: Works only during preview session.
         if (!torch) {
             try {
                 CameraCharacteristics tempChar = cameraManager.getCameraCharacteristics("0");
                 if (tempChar.get(CameraCharacteristics.FLASH_INFO_AVAILABLE)) {
-                    CaptureRequest.Builder tempRequestBuilder;
-                    tempRequestBuilder = mCameraDevice.createCaptureRequest(CameraDevice.TEMPLATE_STILL_CAPTURE);
-                    tempRequestBuilder.set(CaptureRequest.FLASH_MODE, CaptureRequest.FLASH_MODE_TORCH);
-                    tempRequestBuilder.build();
+                    mCaptureRequestBuilder.set(CaptureRequest.FLASH_MODE, CaptureRequest.FLASH_MODE_TORCH);
+                    mPreviewCaptureSession.setRepeatingRequest(mCaptureRequestBuilder.build(), null, camera2handler);
                     Log.d("camera", "Torch activated");
                 }
             } catch (Exception e) {
@@ -461,13 +459,11 @@ public class Camera2API implements SurfaceTextureListener {
 
     public void turnOffTorch() {
         /** deactivates torch if it is on */
-        //FIXME: It's not working
+        //FIXME: Works only during preview session.
         if (torch) {
             try {
-                CaptureRequest.Builder tempRequestBuilder;
-                tempRequestBuilder = mCameraDevice.createCaptureRequest(CameraDevice.TEMPLATE_STILL_CAPTURE);
-                tempRequestBuilder.set(CaptureRequest.FLASH_MODE, CaptureRequest.FLASH_MODE_OFF);
-                tempRequestBuilder.build();
+                mCaptureRequestBuilder.set(CaptureRequest.FLASH_MODE, CaptureRequest.FLASH_MODE_OFF);
+                mPreviewCaptureSession.setRepeatingRequest(mCaptureRequestBuilder.build(), null, camera2handler);
                 Log.d("camera", "Torch deactivated");
             } catch (Exception e) {
                 Log.d("camera", "couldn't turn off torch: " + e);
