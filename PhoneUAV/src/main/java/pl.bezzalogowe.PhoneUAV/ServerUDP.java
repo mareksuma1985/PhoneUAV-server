@@ -30,7 +30,11 @@ public class ServerUDP {
             DatagramPacket packet = new DatagramPacket(buffer, buffer.length, client, port);
             dsocket.send(packet);
             //System.out.println("Feedback sent to " + client.getHostName());
-        } catch (Exception e) {
+        }
+        catch (NullPointerException e) {
+            //System.err.println(e);
+        }
+        catch (Exception e) {
             //System.out.println("Feedback NOT sent to " + client.getHostName() + ": " + e.toString());
             System.err.println(e);
         }
@@ -57,9 +61,13 @@ public class ServerUDP {
                 DatagramPacket packet = new DatagramPacket(buffer, buffer.length, client, port);
                 dsocket.send(packet);
                 //System.out.println("Feedback sent to " + client.getHostName());
-            } catch (Exception e) {
+            }
+            catch (NullPointerException e) {
+            //System.err.println(e);
+            }
+            catch (Exception e) {
                 //System.out.println("Feedback NOT sent to " + client.getHostName());
-                //System.err.println(e);
+                System.err.println(e);
             }
         }
     }
@@ -77,7 +85,11 @@ public class ServerUDP {
                     (byte) ((bits >> 24) & 0xff)};
             DatagramPacket packet = new DatagramPacket(buffer, buffer.length, client, port);
             dsocket.send(packet);
-        } catch (Exception e) {
+        }
+        catch (NullPointerException e) {
+            //System.err.println(e);
+        }
+        catch (Exception e) {
             System.err.println(e);
         }
     }
