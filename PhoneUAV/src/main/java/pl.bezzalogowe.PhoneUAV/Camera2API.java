@@ -447,7 +447,10 @@ public class Camera2API implements SurfaceTextureListener {
                 CameraCharacteristics tempChar = cameraManager.getCameraCharacteristics("0");
                 if (tempChar.get(CameraCharacteristics.FLASH_INFO_AVAILABLE)) {
                     mCaptureRequestBuilder.set(CaptureRequest.FLASH_MODE, CaptureRequest.FLASH_MODE_TORCH);
-                    mPreviewCaptureSession.setRepeatingRequest(mCaptureRequestBuilder.build(), null, camera2handler);
+                    if (isRecording)
+                    {mRecordCaptureSession.setRepeatingRequest(mCaptureRequestBuilder.build(), null, null);}
+                    else
+                    {mPreviewCaptureSession.setRepeatingRequest(mCaptureRequestBuilder.build(), null, camera2handler);}
                     Log.d("camera", "Torch activated");
                 }
             } catch (Exception e) {
@@ -463,7 +466,10 @@ public class Camera2API implements SurfaceTextureListener {
         if (torch) {
             try {
                 mCaptureRequestBuilder.set(CaptureRequest.FLASH_MODE, CaptureRequest.FLASH_MODE_OFF);
-                mPreviewCaptureSession.setRepeatingRequest(mCaptureRequestBuilder.build(), null, camera2handler);
+                if (isRecording)
+                {mRecordCaptureSession.setRepeatingRequest(mCaptureRequestBuilder.build(), null, null);}
+                else
+                {mPreviewCaptureSession.setRepeatingRequest(mCaptureRequestBuilder.build(), null, camera2handler);}
                 Log.d("camera", "Torch deactivated");
             } catch (Exception e) {
                 Log.d("camera", "couldn't turn off torch: " + e);
