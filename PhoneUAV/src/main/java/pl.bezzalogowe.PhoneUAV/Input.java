@@ -234,6 +234,14 @@ maximum value is 32767 (inclusive) (2^15 -1)
         if (main.outputMode == main.USC16) {
             main.ch340commObject.SetPositions(main.outputsElevonLeft, elevonLeft, main.outputsElevonRight, elevonRight, (byte) 100);
         }
+        else if (main.outputMode == main.FT311D_PWM) {
+            main.pwmInterface.SetDutyCycle((byte) main.outputsElevonLeft[0] - 1, (byte) ((elevonLeft - 500) / 20));
+            main.pwmInterface.SetDutyCycle((byte) main.outputsElevonRight[0] - 1, (byte) ((elevonRight - 500) / 20));
+        }
+        else if (main.outputMode == main.FT311D_UART) {
+            main.sk18commObject.SetPosition((byte) main.outputsElevonLeft[0], (elevonLeft - 500) / 2, (byte) 20);
+            main.sk18commObject.SetPosition((byte) main.outputsElevonRight[0], (elevonRight - 500) / 2, (byte) 20);
+        }
     }
 
     private void processThrottle(short value) {
@@ -251,9 +259,9 @@ maximum value is 32767 (inclusive) (2^15 -1)
         if (main.outputMode == main.USC16) {
             main.ch340commObject.SetPosition(main.outputsRudder, main.rdr, (byte) 100);
         } else if (main.outputMode == main.FT311D_PWM) {
-            main.pwmInterface.SetDutyCycle((byte) (main.outputsThrottle[0] - 1), (byte) ((main.rdr - 500) / 20));
+            main.pwmInterface.SetDutyCycle((byte) (main.outputsRudder[0] - 1), (byte) ((main.rdr - 500) / 20));
         } else if (main.outputMode == main.FT311D_UART) {
-            main.sk18commObject.SetPosition((byte) main.outputsThrottle[0], (main.rdr - 500) / 2, (byte) 20);
+            main.sk18commObject.SetPosition((byte) main.outputsRudder[0], (main.rdr - 500) / 2, (byte) 20);
         }
 
         main.seekbarRDR.setProgress(scaleDown(main.rdr));
