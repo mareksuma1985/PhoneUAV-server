@@ -103,7 +103,10 @@ public class SK18comm {
     public void SetPosition(int channel, int position, byte speed) {
         byte[] writeBuffer = new byte[4];
         try {
-            writeBuffer = SK18comm.calculatePacket((byte) channel, (short) (position), (byte) 10);
+            if (channel < 0)
+            {writeBuffer = SK18comm.calculatePacket((byte) Math.abs(channel), (short) (1001 - position), (byte) 10);}
+            else
+            {writeBuffer = SK18comm.calculatePacket((byte) channel, (short) (position), (byte) 10);}
             if (main.uartInterface.SendData(4, writeBuffer) != 0) {
                 Log.d("SK18comm", "SendData");
             }
