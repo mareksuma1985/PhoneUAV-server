@@ -505,7 +505,11 @@ public class Camera2API implements SurfaceTextureListener {
                         Log.d("camera", "torch deactivation error: " + e);
                     }
                 }
-                mRecordCaptureSession.setRepeatingRequest(mCaptureRequestBuilder.build(), null, null);
+                if (isRecording) {
+                    mRecordCaptureSession.setRepeatingRequest(mCaptureRequestBuilder.build(), null, null);
+                } else {
+                    mPreviewCaptureSession.setRepeatingRequest(mCaptureRequestBuilder.build(), null, camera2handler);
+                }
             } catch (Exception e) {
                 Log.d("camera", "torch activation error: " + e);
             }
