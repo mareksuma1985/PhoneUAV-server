@@ -478,6 +478,40 @@ public class Camera2API implements SurfaceTextureListener {
         torch = false;
     }
 
+        class setTorchDelayed implements Runnable {
+        /** sets torch with delay */
+        
+        @Override
+        public void run() {
+            try {
+                Thread.sleep(200);
+            } catch (InterruptedException e) {
+                e.printStackTrace();
+            }
+
+            try {
+                CameraCharacteristics tempChar = cameraManager.getCameraCharacteristics(main.cameraID);
+                if (torch == true) {
+                    if (tempChar.get(CameraCharacteristics.FLASH_INFO_AVAILABLE)) {
+                        mCaptureRequestBuilder.set(CaptureRequest.FLASH_MODE, CaptureRequest.FLASH_MODE_TORCH);
+                        Log.d("camera", "torch toggle: " + "FLASH_INFO_AVAILABLE == true");
+                    } else {
+                        Log.d("camera", "torch toggle error: " + "FLASH_INFO_AVAILABLE == false");
+                    }
+                } else {
+                    try {
+                        mCaptureRequestBuilder.set(CaptureRequest.FLASH_MODE, CaptureRequest.FLASH_MODE_OFF);
+                    } catch (Exception e) {
+                        Log.d("camera", "torch deactivation error: " + e);
+                    }
+                }
+                mRecordCaptureSession.setRepeatingRequest(mCaptureRequestBuilder.build(), null, null);
+            } catch (Exception e) {
+                Log.d("camera", "torch activation error: " + e);
+            }
+        }
+    }
+    
     public void startRecord() {
         try {
             createVideoFileName();
@@ -520,6 +554,9 @@ public class Camera2API implements SurfaceTextureListener {
 
         Thread feedbackFeedbackCamera = new Thread(new Wrap());
         feedbackFeedbackCamera.start();
+        
+        Thread torch = new Thread(new setTorchDelayed());
+        torch.start();
     }
 
     public void stopRecord() {
@@ -547,6 +584,9 @@ public class Camera2API implements SurfaceTextureListener {
         File from = new File(mVideoFileName);
         File to = new File(shortName);
         from.renameTo(to);
+        
+        Thread torch = new Thread(new setTorchDelayed());
+        torch.start();
     }
 
     private void startPreview() throws CameraAccessException {
