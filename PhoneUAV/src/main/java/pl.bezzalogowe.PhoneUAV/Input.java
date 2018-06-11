@@ -464,23 +464,46 @@ else
                 break;
             case 46:
                 // x-input: D-Pad X
-                int rdr = (int) calculateValue(value);
-                main.seekbarRDR.setProgress(scaleDown(rdr));
-                main.update.updateConversationHandler.post(new updateTextThread(main.text_server, "X1 (CH" + main.outputsRudder[0] + ") [" + data[1] + ", " + data[2] + "] " + Integer.toString(value, 10)));
+                if (value == 0) {
+                }
+                else {
+                    /** set increase or decrease trim */
+                    if (value > 0 && main.rudderTrim < 990) {
+                        main.rudderTrim += 10;
+                        main.sendTelemetry(16, main.rudderTrim);
+                    }
+                    if (value < 0 && main.rudderTrim > -990) {
+                        main.rudderTrim -= 10;
+                        main.sendTelemetry(16, main.rudderTrim);
+                    }
+                    /** move rudder after change of trim */
+                    if (main.outputMode == main.FT311D_UART) {
+                        main.sk18commObject.SetPosition((byte) main.outputsRudder[0], (main.rdr - 500 - main.rudderTrim) / 2 , (byte) 20);
+                        main.update.updateConversationHandler.post(new updateTextThread(main.text_server, "rudder-trim: " + main.rudderTrim / 2 + " μs"));
+                    }
+                    else if (main.outputMode == main.USC16) {
+                        main.ch340commObject.SetPosition(main.outputsRudder, main.rdr - main.rudderTrim, (byte) 100, true);
+                        main.update.updateConversationHandler.post(new updateTextThread(main.text_server, "rudder-trim: " + main.rudderTrim + " μs"));
+                    }
+                    main.update.updateConversationHandler.post(new updateTextThread(main.dutyCycleRDR, Short.toString(value)));
+                    main.seekbarRDR.setProgress(scaleDown(main.rdr));
+                }
                 break;
             case 47:
                 // x-input: D-Pad Y
                 if (value == 0) {
-                    // do nothing
-                } else if (value > 0) {
-                    main.elevatorTrim += 10;
-                    main.sendTelemetry(14, main.elevatorTrim);
+                }
+                else {
+                    if (value > 0) {
+                        main.elevatorTrim += 10;
+                        main.sendTelemetry(17, main.elevatorTrim);
+                    }
+                    if (value < 0) {
+                        main.elevatorTrim -= 10;
+                        main.sendTelemetry(17, main.elevatorTrim);
+                    }
                     mixElevons(controllerX2value, controllerY2value);
-
-                } else if (value < 0) {
-                    main.elevatorTrim -= 10;
-                    main.sendTelemetry(14, main.elevatorTrim);
-                    mixElevons(controllerX2value, controllerY2value);
+                    //TODO: move elevator after change of trim
                 }
                 break;
             case 48:
