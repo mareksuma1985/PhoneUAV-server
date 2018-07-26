@@ -677,7 +677,7 @@ Root privilege required to create or modify file by hand */
                 if (camObjectLolipop.mTextureView.isAvailable()) {
                     Log.d("camera", "surface IS available");
                     logObject.saveComment("surface IS available");
-                    camObjectLolipop.setupCamera(camObjectLolipop.mTextureView.getWidth(), camObjectLolipop.mTextureView.getHeight());
+                    camObjectLolipop.setupCamera();
                 } else {
                     Log.d("camera", "surface IS NOT yet available");
                     try {
