@@ -52,6 +52,7 @@ public class Camera2API implements SurfaceTextureListener {
     private static final int STATE_WAIT_LOCK = 1;
     private int mCaptureState = STATE_PREVIEW;
     TextureView mTextureView;
+    Size maxResJPEG, maxResMP4;
 
     TextureView.SurfaceTextureListener msurfacetextureviewlistener = new TextureView.SurfaceTextureListener() {
 
@@ -76,7 +77,7 @@ public class Camera2API implements SurfaceTextureListener {
 
         @Override
         public void onSurfaceTextureAvailable(SurfaceTexture surface, int width, int height) {
-            setupCamera(1920, 1080);
+            setupCamera();
             connectCamera();
         }
     };
@@ -293,15 +294,20 @@ public class Camera2API implements SurfaceTextureListener {
         }
     }
 
-    private static Size pickSize(StreamConfigurationMap map) {
+        private static Size pickSizeJPEG(StreamConfigurationMap map) {
         Size[] sizes = map.getOutputSizes(ImageFormat.JPEG);
         /* min, last item from the list */
         //return list[list.length - 1];
         /* max, first item from the list */
         return sizes[0];
     }
+    
+        private static Size pickSizeMP4(StreamConfigurationMap map) {
+        Size[] sizes = map.getOutputSizes(ImageFormat.YUV_420_888);
+        return sizes[0];
+    }
 
-    public void setupCamera(int width, int height) {
+    public void setupCamera() {
         try {
             camerasList = cameraManager.getCameraIdList();
         } catch (CameraAccessException e) {
@@ -349,9 +355,13 @@ public class Camera2API implements SurfaceTextureListener {
             printSizes(map);
 
             // Picks maximum picture size.
-            Size maxRes = pickSize(map);
-            Log.d(TAG, "picked size: " + maxRes.getWidth() + "×" + maxRes.getHeight());
-            mImageReader = ImageReader.newInstance(maxRes.getWidth(), maxRes.getHeight(), ImageFormat.JPEG, 1);
+            maxResJPEG = pickSizeJPEG(map);
+            Log.d(TAG, "picked photo size: " + maxResJPEG.getWidth() + "×" + maxResJPEG.getHeight());
+
+            maxResMP4 = pickSizeMP4(map);
+            Log.d(TAG, "picked video size: " + maxResMP4.getWidth() + "×" + maxResMP4.getHeight());
+            
+            mImageReader = ImageReader.newInstance(maxResJPEG.getWidth(), maxResJPEG.getHeight(), ImageFormat.JPEG, 1);
             mImageReader.setOnImageAvailableListener(mOnImageAvailableListener, camera2handler);
 
             /** https://developer.android.com/reference/android/hardware/camera2/CaptureRequest.html#CONTROL_AF_MODE */
