@@ -71,6 +71,30 @@ public class ServerUDP {
             }
         }
     }
+    
+   /** https://javarevisited.blogspot.com/2013/02/combine-integer-and-string-array-java-example-tutorial.html */
+    public static byte[] combine(byte[] a, byte[] b) {
+        int length = a.length + b.length;
+        byte[] result = new byte[length];
+        System.arraycopy(a, 0, result, 0, a.length);
+        System.arraycopy(b, 0, result, a.length, b.length);
+        return result;
+    }
+
+    public void send(byte number, double[] coordinates) {
+        /** Sends an array of doubles. */
+
+        try {
+            byte[] header = {number};
+            byte[] buffer = combine(header, main.locObject.doubleArray2Bytes(coordinates));
+            DatagramPacket packet = new DatagramPacket(buffer, buffer.length, client, port);
+            dsocket.send(packet);
+        } catch (NullPointerException e) {
+            //System.err.println(e);
+        } catch (Exception e) {
+            System.err.println("Feedback NOT sent to " + client.getHostName() + ": " + e.toString());
+        }
+    }
 
     public void send(byte number, float value) {
         /** Sends a float. */
