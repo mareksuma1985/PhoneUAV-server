@@ -160,6 +160,10 @@ public class Location extends Thread {
             Log.d("location", e.toString());
             e.printStackTrace();
         }
+	    
+	/** sends location over UDP (must be done in a separate thread) */
+        Thread feedbackLocation = new Thread(new Wrap());
+        feedbackLocation.start();
 
         if (distance < 64) {
             Waypoint read;
@@ -301,21 +305,50 @@ public class Location extends Thread {
 
     /* http://www.java2s.com/Code/Java/File-Input-Output/writesdoublestobytearray.htm
        Copyright 2007 Creare Inc. */
-    public static final byte[] double2Byte(double[] inData) {
+	
+    /** converts one double to an array of 8 bytes */
+    public static final byte[] double2Bytes(double inData) {
+        long bits = Double.doubleToLongBits(inData);
+        byte[] buffer = {(byte) (bits & 0xff),
+                (byte) ((bits >> 8) & 0xff),
+                (byte) ((bits >> 16) & 0xff),
+                (byte) ((bits >> 24) & 0xff),
+                (byte) ((bits >> 32) & 0xff),
+                (byte) ((bits >> 40) & 0xff),
+                (byte) ((bits >> 48) & 0xff),
+                (byte) ((bits >> 56) & 0xff)};
+        return buffer;
+    }
+
+    /** converts an array of doubles to an array of bytes */
+    public static final byte[] doubleArray2Bytes(double[] inArray) {
         int j = 0;
-        int length = inData.length;
+        int length = inArray.length;
         byte[] outData = new byte[length * 8];
         for (int i = 0; i < length; i++) {
-            long data = Double.doubleToLongBits(inData[i]);
-            outData[j++] = (byte) (data >>> 56);
-            outData[j++] = (byte) (data >>> 48);
-            outData[j++] = (byte) (data >>> 40);
-            outData[j++] = (byte) (data >>> 32);
-            outData[j++] = (byte) (data >>> 24);
-            outData[j++] = (byte) (data >>> 16);
-            outData[j++] = (byte) (data >>> 8);
-            outData[j++] = (byte) (data >>> 0);
+            long bits = Double.doubleToLongBits(inArray[i]);
+            outData[j++] = (byte) (bits & 0xff);
+            outData[j++] = (byte) ((bits >> 8) & 0xff);
+            outData[j++] = (byte) ((bits >> 16) & 0xff);
+            outData[j++] = (byte) ((bits >> 24) & 0xff);
+            outData[j++] = (byte) ((bits >> 32) & 0xff);
+            outData[j++] = (byte) ((bits >> 40) & 0xff);
+            outData[j++] = (byte) ((bits >> 48) & 0xff);
+            outData[j++] = (byte) ((bits >> 56) & 0xff);
         }
         return outData;
+    }
+
+    class Wrap implements Runnable {
+        @Override
+        public void run() {
+            double[] coordinates = {recentLocation.getLatitude(), recentLocation.getLongitude()};
+            try {
+                main.sendTelemetry(3, coordinates);
+            } catch (Exception e) {
+                Log.d("Barometer", "error: " + e);
+                main.logObject.saveComment("error: " + e.toString());
+            }
+        }
     }
 }
