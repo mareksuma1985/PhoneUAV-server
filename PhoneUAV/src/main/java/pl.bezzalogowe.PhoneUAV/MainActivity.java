@@ -1319,4 +1319,13 @@ Root privilege required to create or modify file by hand */
             serverUDP.send((byte) number, value);
         }
     }
+
+    /** array of doubles */
+    void sendTelemetry(int number, double[] coordinates) {
+        if (protocol == 0x01) {
+            //TODO: write method for sending array of doubles through TCP
+        } else {
+            serverUDP.send((byte) number, coordinates);
+        }
+    }
 }
