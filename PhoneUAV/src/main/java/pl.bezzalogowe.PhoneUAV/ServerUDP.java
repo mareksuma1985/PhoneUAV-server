@@ -97,7 +97,7 @@ public class ServerUDP {
     }
 
     public void send(byte number, float value) {
-        /** Sends a float. */
+        /** Sends a byte and a float. */
         /** https://stackoverflow.com/questions/14308746/how-to-convert-from-a-float-to-4-bytes-in-java */
 
         try {
@@ -115,6 +115,32 @@ public class ServerUDP {
         }
         catch (Exception e) {
             System.err.println(e);
+        }
+    }
+    
+    public void send(byte number, float[] value) {
+        /** Sends a byte and an array of floats. */
+        /** https://stackoverflow.com/questions/14308746/how-to-convert-from-a-float-to-4-bytes-in-java */
+
+        byte[] buffer = new byte[1 + 4*value.length];
+
+        try {
+            buffer[0] = number;
+            for (int i = 0; i < value.length; i++)
+            {
+                int bits = Float.floatToIntBits(value[i]);
+                buffer[1 + i*4] = (byte) (bits & 0xff);
+                buffer[2 + i*4] = (byte) ((bits >> 8) & 0xff);
+                buffer[3 + i*4] = (byte) ((bits >> 16) & 0xff);
+                buffer[4 + i*4] = (byte) ((bits >> 24) & 0xff);
+            }
+
+            DatagramPacket packet = new DatagramPacket(buffer, buffer.length, client, port);
+            dsocket.send(packet);
+        } catch (NullPointerException e) {
+            //System.err.println(e);
+        } catch (Exception e) {
+            System.err.println("Feedback NOT sent to " + client.getHostName() + ": " + e.toString());
         }
     }
 
