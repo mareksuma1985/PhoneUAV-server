@@ -44,7 +44,7 @@ public class Barometer {
         @Override
         public void run() {
             try {
-                main.sendTelemetry(2, altitudeBarometric);
+                main.sendTelemetry(3, altitudeBarometric);
             } catch (Exception e) {
                 Log.d("Barometer", "error: " + e);
                 main.logObject.saveComment("error: " + e.toString());
