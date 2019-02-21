@@ -344,7 +344,7 @@ public class Location extends Thread {
         public void run() {
             double[] coordinates = {recentLocation.getLatitude(), recentLocation.getLongitude()};
             try {
-                main.sendTelemetry(3, coordinates);
+                main.sendTelemetry(2, coordinates);
             } catch (Exception e) {
                 Log.d("Barometer", "error: " + e);
                 main.logObject.saveComment("error: " + e.toString());
