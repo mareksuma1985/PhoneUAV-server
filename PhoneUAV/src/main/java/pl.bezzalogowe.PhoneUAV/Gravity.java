@@ -34,7 +34,10 @@ public class Gravity {
 
         /* rotates the vector by angle between device and vehicle orientation */
         gravityVectorVehicle = rotateAroundZ(gravityVectorDevice, main.device_orientation[2]);
-
+        
+        Thread feedback = new Thread(new Wrap());
+        feedback.start();
+        
         angle_roll = Math.toDegrees(Math.atan2((double) gravityVectorVehicle[0], (double) gravityVectorVehicle[2]));
         angle_pitch = Math.toDegrees(Math.atan2((double) gravityVectorVehicle[1], (double) gravityVectorVehicle[2]));
 
@@ -44,9 +47,6 @@ public class Gravity {
                     angle_pitch, main.autopilot.target_pitch, angle_roll));
             main.autopilot.processGravity();
         }
-
-        Thread feedback = new Thread(new Wrap());
-        feedback.start();
     }
 
     public void startGravity(MainActivity activityArgument) {
@@ -79,7 +79,8 @@ public class Gravity {
         @Override
         public void run() {
             try {
-                main.sendTelemetry(1, (short) angle_roll, (short) angle_pitch);
+                float[] vector = {gravityVectorVehicle[0], gravityVectorVehicle[1], gravityVectorVehicle[2]};
+                main.sendTelemetry(1, vector);
             } catch (Exception e) {
                 Log.d("Gravity sensor", "error: " + e);
                 main.logObject.saveComment("error: " + e.toString());
