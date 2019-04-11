@@ -2,16 +2,22 @@ package pl.bezzalogowe.PhoneUAV;
 
 import android.app.Activity;
 import android.app.AlertDialog;
+import android.app.PendingIntent;
+import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.DialogInterface;
 import android.content.Intent;
+import android.content.IntentFilter;
 import android.content.SharedPreferences;
 import android.content.pm.ActivityInfo;
+import android.content.pm.PackageManager;
 import android.graphics.Color;
 import android.hardware.Sensor;
 import android.hardware.SensorEvent;
 import android.hardware.SensorEventListener;
+import android.hardware.SensorManager;
 import android.hardware.usb.UsbAccessory;
+import android.hardware.usb.UsbDevice;
 import android.hardware.usb.UsbManager;
 import android.net.Uri;
 import android.net.wifi.WifiInfo;
@@ -22,7 +28,6 @@ import android.os.Handler;
 import android.os.Message;
 import android.preference.PreferenceManager;
 import android.support.v4.app.ActivityCompat;
-import android.text.InputType;
 import android.util.Log;
 import android.view.Menu;
 import android.view.MenuInflater;
@@ -33,14 +38,14 @@ import android.view.View.OnClickListener;
 import android.view.WindowManager;
 import android.widget.Button;
 import android.widget.CheckBox;
-import android.widget.EditText;
-import android.widget.RelativeLayout;
+import android.widget.CompoundButton;
+import android.widget.LinearLayout;
 import android.widget.SeekBar;
 import android.widget.TextView;
 
 import java.io.DataOutputStream;
 import java.io.IOException;
-import java.net.ServerSocket;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Timer;
 import java.util.TimerTask;
@@ -63,11 +68,26 @@ public class MainActivity extends Activity implements SensorEventListener {
     int inputFormat = FORMAT_DEC;
     ServerUDP serverUDP = new ServerUDP(main);
     ServerTCP serverTCP = new ServerTCP(main);
+
+    NetworkPing pingacz = new NetworkPing(main);
     UpdateUI update = new UpdateUI();
+    final Handler handler = new Handler() {
+        @Override
+        public void handleMessage(Message msg) {
+            for (int i = 0; i < uartInterface.actualNumBytes[0]; i++) {
+                uartInterface.readBufferToChar[i] = (char) uartInterface.readBufferFB[i];
+            }
+            appendData(uartInterface.readBufferToChar, uartInterface.actualNumBytes[0]);
+        }
+    };
     Input inputObject = new Input();
     SK18comm sk18commObject = new SK18comm();
+    /* needed for USB device permission */
+    PendingIntent mPermissionIntent;
     CH340comm ch340commObject;
-    /* API≥21 */
+    /* API≤20 */
+    CameraAPI camObjectKitkat = new CameraAPI();
+    /* API>20 */
     Camera2API camObjectLolipop = new Camera2API();
     /* camera number */
     String cameraID;
@@ -83,97 +103,83 @@ public class MainActivity extends Activity implements SensorEventListener {
     Autopilot autopilot = new Autopilot();
     String serverpath;
     /* layout components */
-    TextView dutyCycleRDR, dutyCycleAIL, dutyCycleELEV, dutyCycleTHROT, dutyCycleELEV_L, dutyCycleELEV_R,
+    TextView dutyCycleRDR, dutyCycleAIL, dutyCycleELEV, dutyCycleTHROT, dutyCycleELEV_L, dutyCycleELEV_R, dutyCycleTEST,
             axis_text_x, axis_text_y, axis_text_z,
             angle_text_pitch, angle_text_roll, angle_text_heading, altitude_text, text_server, text_feedback;
-    Button usbButton, resetButton, torchButton, photoButton, videoButton;
+    Button resetButton, usbButton, torchButton, photoButton, videoButton;
     Button startPWMminButton, startPWMmaxButton, throttleUpButton, throttleDownButton, throttleStopButton;
     Button throttleMinButton, throttleMaxButton;
-    CheckBox checkbox_stabilistation_pitch, checkbox_stabilistation_roll;
+    CheckBox checkboxAutopilotFeature1, checkboxAutopilotFeature2;
     int period;
     byte outputMode, protocol;
-    SeekBar seekbarRDR, seekbarAIL, seekbarELEV, seekbarTHROT, seekbarELEV_L, seekbarELEV_R;
+    /* needed for USB device permission */
+    public final BroadcastReceiver mUsbReceiver = new BroadcastReceiver() {
+        public void onReceive(Context context, Intent intent) {
+            String action = intent.getAction();
+            if (ch340commObject.ACTION_USB_PERMISSION.equals(action)) {
+                synchronized (this) {
+                    UsbDevice device = (UsbDevice) intent.getParcelableExtra(UsbManager.EXTRA_DEVICE);
 
-    /** USC-16: output channels for each control surface
-     * You can use more than one servo per surface */
-
-    int[] outputsAileron,
-          outputsFlaperonLeft,
-          outputsFlaperonRight,
-          outputsElevator,
-          outputsThrottle,
-          outputsRudder,
-          outputsElevonLeft,
-          outputsElevonRight;
-    int ail, ele, thr, rdr, flaps;
-
-    // 500 to 2500 milliseconds pulse width range
-    int throttleMin = 500;
-    int throttleMax = 2500;
-    int throttleDenominator;
-    int elevatorTrim = 0;
-
-    final Handler handler = new Handler() {
-        @Override
-        public void handleMessage(Message msg) {
-            for (int i = 0; i < uartInterface.actualNumBytes[0]; i++) {
-                uartInterface.readBufferToChar[i] = (char) uartInterface.readBufferFB[i];
+                    if (intent.getBooleanExtra(UsbManager.EXTRA_PERMISSION_GRANTED, false)) {
+                        if (device != null) {
+                            main.update.updateConversationHandler.post(new updateTextThread(main.text_server, "permission granted to " + device.getProductName()));
+                            /** set up device communication */
+                            try {
+                                ch340commObject.open(main);
+                            } catch (Exception e) {
+                                e.printStackTrace();
+                            }
+                        }
+                    } else {
+                        main.update.updateConversationHandler.post(new updateTextThread(main.text_server, "permission denied to " + device.getProductName()));
+                    }
+                }
             }
-            appendData(uartInterface.readBufferToChar, uartInterface.actualNumBytes[0]);
         }
     };
+    SeekBar seekbarRDR, seekbarAIL, seekbarELEV, seekbarTHROT, seekbarELEV_L, seekbarELEV_R, seekbarTEST;
+    /**
+     * USC-16: output channels for each control surface
+     * You can use more than one servo per surface
+     */
 
-    Handler handlerCamera = new Handler(new Handler.Callback() {
+    int[] outputsAileron,
+            outputsFlaperonLeft,
+            outputsFlaperonRight,
+            outputsElevator,
+            outputsThrottle,
+            outputsRudder,
+            outputsElevonLeft,
+            outputsElevonRight;
+    int ail, ele, thr, rdr, flaps;
+    int elevatorTrim = 0;
+    int rudderTrim = 0;
+    Handler handlerRecord = new Handler(new Handler.Callback() {
         @Override
         public boolean handleMessage(Message msg) {
             if (msg.arg1 == 1) {
-                camObjectLolipop.startRecord();
+                main.camObjectLolipop.startRecord();
             } else {
-                camObjectLolipop.stopRecord();
+                main.camObjectLolipop.stopRecord();
             }
             return false;
         }
     });
-
     Handler handlerTorch = new Handler(new Handler.Callback() {
         @Override
         public boolean handleMessage(Message msg) {
             if (msg.arg1 == 1) {
-                main.torchButton.setText("\u00D7");
-                main.camObjectLolipop.torch = true;
+                camObjectLolipop.turnOnTorch();
+                torchButton.setTextColor(Color.rgb(255, 255, 255));
+                camObjectLolipop.torch = true;
             } else {
-                main.torchButton.setText("\uD83D\uDCA1");
-                main.camObjectLolipop.torch = false;
+                camObjectLolipop.turnOffTorch();
+                torchButton.setTextColor(Color.rgb(0, 0, 0));
+                camObjectLolipop.torch = false;
             }
             return false;
         }
     });
-
-    /** USB input data handler */
-    private class handler_thread extends Thread {
-        Handler mHandler;
-
-        handler_thread(Handler h) {
-            mHandler = h;
-        }
-
-        public void run() {
-            Message msg;
-            while (true) {
-                try {
-                    Thread.sleep(200);
-                } catch (InterruptedException e) {
-                }
-
-                uartInterface.status = uartInterface.ReadData(4096, uartInterface.readBufferFB, uartInterface.actualNumBytes);
-
-                if (uartInterface.status == 0x00 && uartInterface.actualNumBytes[0] > 0) {
-                    msg = mHandler.obtainMessage();
-                    mHandler.sendMessage(msg);
-                }
-            }
-        }
-    }
 
     public static void powerOTG(boolean flipBool) {
         /** http://stackoverflow.com/questions/20932102/execute-shell-command-from-android */
@@ -205,30 +211,46 @@ public class MainActivity extends Activity implements SensorEventListener {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.main);
 
-        if (shouldAskPermissions()) {
+        if (Build.VERSION.SDK_INT >= 23) {
             askPermissions();
         }
 
+        int result = getApplicationContext().checkCallingPermission("android.permission.INTERNET");
+        if (result == PackageManager.PERMISSION_GRANTED) {
+            Log.d("permissions", "Internet granted");
+            //Toast.makeText(this, "Permission granted to INTERNET", Toast.LENGTH_SHORT).show();
+        } else if (result == PackageManager.PERMISSION_DENIED) {
+            Log.d("permissions", "Internet denied");
+            //Toast.makeText(this, "Permission DENIED to INTERNET", Toast.LENGTH_SHORT).show();
+        }
+
 /** Path to preferences file: /data/data/pl.bezzalogowe.PhoneUAV/shared_prefs/
-Root privilege required to create or modify file by hand */
+ Root privilege required to create or modify file by hand */
 
         SharedPreferences settings = PreferenceManager.getDefaultSharedPreferences(main);
 
 /** https://www.ef3m.pl/pl/blog/Nadajnik-i-odbiornik-2,4GHz/12 */
-/** If flaperon or elevon servos are installed in opposite directions, one flaperons' channels should be negative */
 
-        outputsAileron = getOutputs("outputs-aileron", "8");
-        outputsFlaperonLeft = getOutputs("outputs-flaperon-left", "9");
-        outputsFlaperonRight = getOutputs("outputs-flaperon-right", "-10");
+        outputsAileron = getOutputs("outputs-aileron", "1");
         outputsElevator = getOutputs("outputs-elevator", "2");
         outputsThrottle = getOutputs("outputs-throttle", "3");
         outputsRudder = getOutputs("outputs-rudder", "4");
-        outputsElevonLeft = getOutputs("outputs-elevon-left", "5");
-        outputsElevonRight = getOutputs("outputs-elevon-right", "-6");
+
+        outputsElevonLeft = getOutputs("outputs-elevon-left", "6");
+        outputsElevonRight = getOutputs("outputs-elevon-right", "-7");
+
+        outputsFlaperonLeft = getOutputs("outputs-flaperon-left", "9");
+        outputsFlaperonRight = getOutputs("outputs-flaperon-right", "10");
+
+        autopilot.proportional = Double.valueOf(settings.getString("autopilot-proportional", "1"));
+        autopilot.integral = Double.valueOf(settings.getString("autopilot-integral", "0"));
+        autopilot.derivative = Double.valueOf(settings.getString("autopilot-derivative", "0"));
+
+/** If flaperon or elevon servos are installed in opposite directions, one flaperons' (elevons') channels should be negative */
 
         Log.d("getPreference", "channel order: " + outputsAileron[0] + ",\t" + outputsFlaperonLeft[0] + ",\t" + outputsFlaperonRight[0] + ",\n" + outputsElevator[0] + ",\t" + outputsThrottle[0] + ",\t" + outputsRudder[0] + ",\t" + outputsElevonLeft[0] + ",\t" + outputsElevonRight[0] + "\n");
 
-/* angle between the device and vehicle orientation */
+        /* angle between the device and vehicle orientation */
 
 /*
 90 degr: <
@@ -273,6 +295,17 @@ Root privilege required to create or modify file by hand */
             e.printStackTrace();
         }
 
+        /** e-mail recipients separated with commas or semicolons */
+
+        try {
+            camObjectLolipop.toEmails = settings.getString("email-list", "msuma@wp.pl");
+            if (camObjectLolipop.toEmails != "") {
+                camObjectLolipop.toEmailList = Arrays.asList(camObjectLolipop.toEmails.split("\\s*[,;]\\s*"));
+            }
+        } catch (NumberFormatException e) {
+            e.printStackTrace();
+        }
+
         /* TCP or UDP */
         if (settings.getString("protocol", "UDP").equals("TCP")) {
             protocol = 0x01;
@@ -290,20 +323,11 @@ Root privilege required to create or modify file by hand */
             cameraID = "0";
         }
 
-        usbButton = (Button) findViewById(R.id.usbButton);
-        usbButton.setText("\uD83D\uDD0C");
-
         resetButton = (Button) findViewById(R.id.resetButton);
-        resetButton.setText("\uD83D\uDD03");
-
+        usbButton = (Button) findViewById(R.id.usbButton);
         torchButton = (Button) findViewById(R.id.torchButton);
-        torchButton.setText("\uD83D\uDCA1");
-
         photoButton = (Button) findViewById(R.id.photoButton);
-        photoButton.setText("\uD83D\uDCF7");
-
         videoButton = (Button) findViewById(R.id.videoStartButton);
-        videoButton.setText("\u25CF");
 
         dutyCycleRDR = (TextView) findViewById(R.id.DutyCycle1Text);
         dutyCycleAIL = (TextView) findViewById(R.id.DutyCycle2Text);
@@ -336,9 +360,9 @@ Root privilege required to create or modify file by hand */
         startPWMminButton.setOnClickListener(new OnClickListener() {
             public void onClick(View v) {
                 if (outputMode == USC16) {
-                    ch340commObject.startPWM(main, throttleMin);
+                    ch340commObject.startPWM(main, ch340commObject.throttleMin);
                 } else if (outputMode == FT311D_UART) {
-                    sk18commObject.startPWM(main, throttleMin);
+                    sk18commObject.startPWM(main, ch340commObject.throttleMin);
                 }
                 /* PWM */
             }
@@ -348,9 +372,9 @@ Root privilege required to create or modify file by hand */
         startPWMmaxButton.setOnClickListener(new OnClickListener() {
             public void onClick(View v) {
                 if (outputMode == USC16) {
-                    ch340commObject.startPWM(main, throttleMax);
+                    ch340commObject.startPWM(main, ch340commObject.throttleMax);
                 } else if (outputMode == FT311D_UART) {
-                    sk18commObject.startPWM(main, throttleMax);
+                    sk18commObject.startPWM(main, ch340commObject.throttleMax);
                 }
                 /* PWM */
             }
@@ -361,7 +385,7 @@ Root privilege required to create or modify file by hand */
         throttleMinButton.setText("\u22a2");
         throttleMinButton.setOnClickListener(new OnClickListener() {
             public void onClick(View v) {
-                thr = throttleMin;
+                thr = ch340commObject.throttleMin;
                 if (outputMode == USC16) {
                     ch340commObject.SetPosition(outputsThrottle, thr, (byte) 100);
                 }
@@ -374,7 +398,7 @@ Root privilege required to create or modify file by hand */
         throttleMaxButton.setText("\u22a3");
         throttleMaxButton.setOnClickListener(new OnClickListener() {
             public void onClick(View v) {
-                thr = throttleMax;
+                thr = ch340commObject.throttleMax;
                 if (outputMode == USC16) {
                     ch340commObject.SetPosition(outputsThrottle, thr, (byte) 100);
                 }
@@ -407,24 +431,26 @@ Root privilege required to create or modify file by hand */
             }
         });
 
-        text_server = (TextView) findViewById(R.id.text_server);
-        text_feedback = (TextView) findViewById(R.id.text_feedback);
-        axis_text_x = (TextView) findViewById(R.id.Axis0Text);
-        axis_text_y = (TextView) findViewById(R.id.Axis1Text);
-        axis_text_z = (TextView) findViewById(R.id.Axis2Text);
+        text_server = findViewById(R.id.text_server);
+        text_feedback = findViewById(R.id.text_feedback);
+        axis_text_x = findViewById(R.id.Axis0Text);
+        axis_text_y = findViewById(R.id.Axis1Text);
+        axis_text_z = findViewById(R.id.Axis2Text);
 
         text_feedback.setTextColor(Color.rgb(0, 255, 0));
 
-        angle_text_pitch = (TextView) findViewById(R.id.Angle0Text);
-        angle_text_roll = (TextView) findViewById(R.id.Angle1Text);
-        angle_text_heading = (TextView) findViewById(R.id.Angle2Text);
-        altitude_text = (TextView) findViewById(R.id.AltitudeText);
+        angle_text_pitch = findViewById(R.id.Angle0Text);
+        angle_text_roll = findViewById(R.id.Angle1Text);
+        angle_text_heading = findViewById(R.id.Angle2Text);
+        altitude_text = findViewById(R.id.AltitudeText);
 
-        checkbox_stabilistation_pitch = (CheckBox) findViewById(R.id.stabilisation_pitch);
-        checkbox_stabilistation_roll = (CheckBox) findViewById(R.id.stabilisation_roll);
+        checkboxAutopilotFeature1 = (CheckBox) findViewById(R.id.checkboxAutopilot1);
+        checkboxAutopilotFeature2 = (CheckBox) findViewById(R.id.checkboxAutopilot2);
 
-        // getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
-        // getWindow().clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+        /*
+        getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+        getWindow().clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+        */
 
         if (protocol == 0x01) {
             serverTCP.startServer();
@@ -442,7 +468,14 @@ Root privilege required to create or modify file by hand */
         initiateFT311();
 
         ch340commObject = new CH340comm();
-        initiateCH340();
+
+        /* needed for USB device permission */
+        mPermissionIntent = PendingIntent.getBroadcast(this, 0, new Intent(ch340commObject.ACTION_USB_PERMISSION), 0);
+        IntentFilter filter = new IntentFilter(ch340commObject.ACTION_USB_PERMISSION);
+        registerReceiver(mUsbReceiver, filter);
+
+        Thread delayedInitiateThread = new Thread(new DelayedInitiateDeviceThread());
+        delayedInitiateThread.start();
 
         handlerThread = new handler_thread(handler);
         handlerThread.start();
@@ -451,17 +484,26 @@ Root privilege required to create or modify file by hand */
         serverTCP.server_port = Integer.valueOf(settings.getString("server-port", "6000"));
         period = Integer.valueOf(settings.getString("period", "3"));
 
-        throttleMin = Integer.valueOf(settings.getString("throttle-min", "500"));
-        throttleMax = Integer.valueOf(settings.getString("throttle-max", "2500"));
+        ch340commObject.servoElevatorMin = Integer.valueOf(settings.getString("servo-elevator-min", "800"));
+        ch340commObject.servoElevatorMax = Integer.valueOf(settings.getString("servo-elevator-max", "2200"));
 
-        startPWMminButton.setText(Integer.toString(throttleMin));
-        startPWMmaxButton.setText(Integer.toString(throttleMax));
+        ch340commObject.servoRudderMin = Integer.valueOf(settings.getString("servo-rudder-min", "740"));
+        ch340commObject.servoRudderMax = Integer.valueOf(settings.getString("servo-rudder-max", "2260"));
 
-        if ((throttleMax - throttleMin) != 0) {
-            throttleDenominator = (65536 / (throttleMax - throttleMin));
+        ch340commObject.servoElevonMin = Integer.valueOf(settings.getString("servo-elevon-min", "483"));
+        ch340commObject.servoElevonMax = Integer.valueOf(settings.getString("servo-elevon-max", "2443"));
+
+        ch340commObject.throttleMin = Integer.valueOf(settings.getString("throttle-min", "1000"));
+        ch340commObject.throttleMax = Integer.valueOf(settings.getString("throttle-max", "2000"));
+
+        if ((ch340commObject.throttleMax - ch340commObject.throttleMin) != 0) {
+            ch340commObject.throttleDenominator = (65534 / (ch340commObject.throttleMax - ch340commObject.throttleMin));
         } else {
-            throttleDenominator = 65536 / 2000;
+            ch340commObject.throttleDenominator = 65534 / 1000;
         }
+
+        startPWMminButton.setText(Integer.toString(ch340commObject.throttleMin));
+        startPWMmaxButton.setText(Integer.toString(ch340commObject.throttleMax));
 
         //FIXME: execute SetPeriod() after ResumeAccessory, not after fixed time.
         new Timer().schedule(new TimerTask() {
@@ -471,11 +513,14 @@ Root privilege required to create or modify file by hand */
             }
         }, 2000);
 
+        rudderTrim = Integer.valueOf(settings.getString("rudder-trim", "0"));
+        Log.d("rudder-trim", "read: " + rudderTrim);
+
         magObject.magnetic_declination = Double.valueOf(settings.getString("magnetic-declination", "0,0").replaceAll(",", "."));
         Log.d("magnetic-declination", "read: " + magObject.magnetic_declination);
         getWindow().setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_HIDDEN);
 
-        pressureObject.pressure_mean_sealevel = Float.valueOf(settings.getString("pressure-mean-sealevel", "1013,25").replaceAll(",", "."));
+        pressureObject.pressure_mean_sealevel = Float.valueOf(settings.getString("pressure-mean-sealevel", Float.toString(SensorManager.PRESSURE_STANDARD_ATMOSPHERE)).replaceAll(",", "."));
         Log.d("pressure-mean-sealevel", "read: " + pressureObject.pressure_mean_sealevel);
 
         inputObject.startController(this);
@@ -485,13 +530,14 @@ Root privilege required to create or modify file by hand */
         pressureObject.startBarometer(this);
         locObject.startLocation(this);
         logObject.startLog(this);
-        autopilot.startAutopilot(this);
 
-        if (Build.VERSION.SDK_INT >= 21) {
-            /* API≥21 */
+        if (Build.VERSION.SDK_INT <= 20 /*Build.VERSION_CODES.KITKAT_WATCH*/) {
+            /* API≤20 */
+            setupButtonsKitkat();
+        } else {
+            /* API≥20 */
             setupButtonsLolipop();
         }
-
         setupWidgets();
         serverTCP.displayAddress();
     }
@@ -512,27 +558,29 @@ Root privilege required to create or modify file by hand */
     public boolean onOptionsItemSelected(MenuItem item) {
         // Handle item selection
         switch (item.getItemId()) {
-            case R.id.set_port:
-                setPortNumber();
-                return true;
             case R.id.switch_orientation:
                 switchOrientation();
-                return true;
+                //return true;
+                break;
             case R.id.power_to_usb:
                 powerToUSB();
-                return true;
+                break;
             case R.id.get_info:
                 getInfo();
-                return true;
+                break;
+            case R.id.toggle_alt_spoof:
+                toggle_altitude_spoofing();
+                break;
             case R.id.options:
                 showOptions();
-                return true;
+                break;
             case R.id.help:
                 openPage();
-                return true;
+                break;
             default:
-                return super.onOptionsItemSelected(item);
+                break;
         }
+        return super.onOptionsItemSelected(item);
     }
 
     public int[] getOutputs(String key, String defaults) {
@@ -557,31 +605,21 @@ Root privilege required to create or modify file by hand */
     public void initiateCH340() {
         UsbManager usbmanager = (UsbManager) this.getSystemService(Context.USB_SERVICE);
         HashMap devicesList = usbmanager.getDeviceList();
-        Object[] devices = devicesList.values().toArray();
-        for (Object device : devices) {
-            if (device.toString().indexOf("mVendorId=6790") != -1 && device.toString().indexOf("mProductId=29987") != -1) {
-                update.updateConversationHandler.post(new updateTextThread(text_server, "USC-16 mode"));
-                outputMode = USC16;
-
-                try {
-                    ch340commObject.open(this);
-                } catch (Exception e) {
-                    e.printStackTrace();
-                }
-
-                try {
-                    if (ch340commObject.isOpen) {
-                        ch340commObject.config();
-                    }
-                } catch (Exception e) {
-                    e.printStackTrace();
+        if (devicesList.size() > 0) {
+            Object[] devices = devicesList.values().toArray();
+            for (Object device : devices) {
+                if (device.toString().indexOf("mVendorId=6790") != -1 &&
+                        (device.toString().indexOf("mProductId=29987") != -1 ||
+                                device.toString().indexOf("mProductId=21795") != -1)) {
+                    /* needed for USB device permission */
+                    usbmanager.requestPermission((UsbDevice) device, mPermissionIntent);
                 }
             }
         }
     }
 
     private void initiateFT311() {
-        //detects "mModel=FTDIPWMDemo" or "mModel=FTDIUARTDemo"
+        /** Detects "mModel=FTDIPWMDemo" or "mModel=FTDIUARTDemo". */
         UsbManager usbmanager = (UsbManager) this.getSystemService(Context.USB_SERVICE);
         UsbAccessory[] usbAccessories = usbmanager.getAccessoryList();
         if (usbAccessories != null) {
@@ -626,19 +664,19 @@ Root privilege required to create or modify file by hand */
         seekbarRDR.setProgress(50);
         seekbarAIL.setProgress(50);
         seekbarELEV.setProgress(50);
-        seekbarTHROT.setProgress((throttleMin - 500) / 20);
+        seekbarTHROT.setProgress(0);
         seekbarELEV_L.setProgress(50);
         seekbarELEV_R.setProgress(50);
 
         //TODO: there must at least one channel assigned, this should not be obligatory
         try {
             if (outputMode == FT311D_PWM) {
-                pwmInterface.SetDutyCycle((byte) (outputsRudder[0] - 1), (byte) seekbarRDR.getProgress());
-                pwmInterface.SetDutyCycle((byte) (outputsAileron[0] - 1), (byte) seekbarAIL.getProgress());
-                pwmInterface.SetDutyCycle((byte) (outputsElevator[0] - 1), (byte) seekbarELEV.getProgress());
-                pwmInterface.SetDutyCycle((byte) (outputsThrottle[0] - 1), (byte) seekbarTHROT.getProgress());
-                pwmInterface.SetDutyCycle((byte) (outputsElevonLeft[0] - 1), (byte) seekbarELEV_L.getProgress());
-                pwmInterface.SetDutyCycle((byte) (outputsElevonRight[0] - 1), (byte) seekbarELEV_R.getProgress());
+                pwmInterface.SetDutyCycle((byte) (outputsRudder[0]), (byte) seekbarRDR.getProgress());
+                pwmInterface.SetDutyCycle((byte) (outputsAileron[0]), (byte) seekbarAIL.getProgress());
+                pwmInterface.SetDutyCycle((byte) (outputsElevator[0]), (byte) seekbarELEV.getProgress());
+                pwmInterface.SetDutyCycle((byte) (outputsThrottle[0]), (byte) seekbarTHROT.getProgress());
+                pwmInterface.SetDutyCycle((byte) (outputsElevonLeft[0]), (byte) seekbarELEV_L.getProgress());
+                pwmInterface.SetDutyCycle((byte) (outputsElevonRight[0]), (byte) seekbarELEV_R.getProgress());
             } else if (outputMode == FT311D_UART) {
                 sk18commObject.SetPosition((byte) outputsRudder[0], seekbarRDR.getProgress() * 10, (byte) 10);
                 sk18commObject.SetPosition((byte) outputsAileron[0], seekbarAIL.getProgress() * 10, (byte) 10);
@@ -656,6 +694,11 @@ Root privilege required to create or modify file by hand */
     }
 
     @Override
+    public void onStart() {
+        super.onStart();
+    }
+
+    @Override
     protected void onResume() {
         // Ideally should implement onResume() and onPause() to take appropriate action when the activity looses focus
         Log.d("called", "onResume");
@@ -668,15 +711,16 @@ Root privilege required to create or modify file by hand */
 		 magObject.sensorInstanceMag, SensorManager.SENSOR_DELAY_NORMAL);
 		 */
 
-        if (Build.VERSION.SDK_INT >= 21) {
-            /* API≥21 */
+        if (Build.VERSION.SDK_INT <= 20 /* Build.VERSION_CODES.KITKAT_WATCH */) {
+            //camObjectKitkat.setListener(this);
+        } else {
+            /* API>20 */
             if (camObjectLolipop.mPreviewCaptureSession == null) {
                 // Preview not initialized
                 camObjectLolipop.setListener(this);
                 camObjectLolipop.startCameraThread();
                 if (camObjectLolipop.mTextureView.isAvailable()) {
                     Log.d("camera", "surface IS available");
-                    logObject.saveComment("surface IS available");
                     camObjectLolipop.setupCamera();
                 } else {
                     Log.d("camera", "surface IS NOT yet available");
@@ -684,7 +728,6 @@ Root privilege required to create or modify file by hand */
                         camObjectLolipop.cameraManager = (android.hardware.camera2.CameraManager) getSystemService(CAMERA_SERVICE);
                     } catch (Exception e) {
                         Log.d("camera", "manager: " + e.toString());
-                        logObject.saveComment("setup: " + e.toString());
                     }
                 }
             } else {
@@ -700,8 +743,9 @@ Root privilege required to create or modify file by hand */
         // action when the activity looses focus
         Log.d("called", "onPause");
 
-        if (Build.VERSION.SDK_INT >= 21) {
-            //* API≥21 */
+        if (Build.VERSION.SDK_INT <= 20 /* Build.VERSION_CODES.KITKAT_WATCH */) {
+        } else {
+            /* API>20 */
             if (camObjectLolipop.mPreviewCaptureSession == null) {
                 // Preview not initialized, improbable situation
                 camObjectLolipop.closeActiveCamera();
@@ -752,18 +796,37 @@ Root privilege required to create or modify file by hand */
         // do nothing
     }
 
-    public void toggleStabiliseRoll(View view) {
-        if (autopilot.stabilize_roll)
-            autopilot.stabilize_roll = false;
-        else
-            autopilot.stabilize_roll = true;
-    }
+    private void setupButtonsKitkat() {
+        camObjectKitkat.mTextureView = (TextureView) this.findViewById(R.id.preview);
 
-    public void toggleStabilisePitch(View view) {
-        if (autopilot.stabilize_pitch)
-            autopilot.stabilize_pitch = false;
-        else
-            autopilot.stabilize_pitch = true;
+        torchButton.setOnClickListener(new OnClickListener() {
+            public void onClick(View v) {
+                if (camObjectKitkat.torch) {
+                    camObjectKitkat.turnOffTorch();
+                    torchButton.setTextColor(Color.rgb(255, 255, 255));
+                } else {
+                    camObjectKitkat.turnOnTorch();
+                    torchButton.setTextColor(Color.rgb(0, 0, 0));
+                }
+            }
+        });
+
+        photoButton.setOnClickListener(new OnClickListener() {
+            public void onClick(View v) {
+                camObjectKitkat.captureImage(false);
+            }
+        });
+
+        videoButton.setOnClickListener(new OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                if (!camObjectKitkat.isRecording) {
+                    camObjectKitkat.captureVideoStart();
+                } else {
+                    camObjectKitkat.captureVideoStop();
+                }
+            }
+        });
     }
 
     private void setupButtonsLolipop() {
@@ -776,10 +839,10 @@ Root privilege required to create or modify file by hand */
             public void onClick(View v) {
                 if (camObjectLolipop.torch) {
                     camObjectLolipop.turnOffTorch();
-                    torchButton.setText("\uD83D\uDCA1");
+                    torchButton.setTextColor(Color.rgb(255, 255, 255));
                 } else {
                     camObjectLolipop.turnOnTorch();
-                    torchButton.setText("\u00D7");
+                    torchButton.setTextColor(Color.rgb(0, 0, 0));
                 }
             }
         });
@@ -802,30 +865,11 @@ Root privilege required to create or modify file by hand */
         });
     }
 
-    private void setThrottleBounds() {
-        //FIXME: Setting width.
-        RelativeLayout.LayoutParams seekbarParams = (RelativeLayout.LayoutParams) seekbarTHROT.getLayoutParams();
-        Log.d("seekbar", "width: " + seekbarParams.width);
-        View seekbarMinimum, seekbarMaximum;
-        seekbarMinimum = (View) findViewById(R.id.SeekbarMinimum);
-        seekbarMaximum = (View) findViewById(R.id.SeekbarMaximum);
-/*
-        RelativeLayout.LayoutParams seekbarMinimumParams = (RelativeLayout.LayoutParams) seekbarMinimum.getLayoutParams();
-        seekbarMinimumParams.width = ((throttleMin-500)/2000) * seekbarParams.width;
-        seekbarMinimum.setLayoutParams(seekbarMinimumParams);
-
-        RelativeLayout.LayoutParams seekbarMaximumParams = (RelativeLayout.LayoutParams) seekbarMaximum.getLayoutParams();
-        seekbarMaximumParams.width = ((3000-throttleMax)/2000) * seekbarParams.width;
-        seekbarMaximum.setLayoutParams(seekbarMaximumParams);
-*/
-        seekbarMinimum.setTranslationX((int) ((throttleMin - 500) * 0.434));
-        seekbarMaximum.setTranslationX((int) ((throttleMax - 2500) * 0.434));
-    }
-
     private void setupWidgets() {
         usbButton.setOnClickListener(new OnClickListener() {
             public void onClick(View v) {
-                initiateCH340();
+                //TODO: open/close
+                ch340commObject.open(main);
             }
         });
 
@@ -861,7 +905,29 @@ Root privilege required to create or modify file by hand */
         });
 */
 
-		/** rudder */
+        checkboxAutopilotFeature1.setOnCheckedChangeListener(new CompoundButton.OnCheckedChangeListener() {
+            @Override
+            public void onCheckedChanged(CompoundButton buttonView, boolean isChecked) {
+                if (isChecked) {
+                    autopilot.startAutopilot(main);
+                } else {
+                    autopilot.stopAutopilot(main);
+                }
+            }
+        });
+
+        checkboxAutopilotFeature2.setOnCheckedChangeListener(new CompoundButton.OnCheckedChangeListener() {
+            @Override
+            public void onCheckedChanged(CompoundButton buttonView, boolean isChecked) {
+                if (isChecked) {
+                    main.autopilot.startFollowingWaypoints(main);
+                } else {
+                    main.autopilot.stopFollowingWaypoints(main);
+                }
+            }
+        });
+
+        /** rudder */
         seekbarRDR.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
             public void onStopTrackingTouch(SeekBar seekBar) {
             }
@@ -872,12 +938,13 @@ Root privilege required to create or modify file by hand */
             public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
                 if (fromUser) {
                     dutyCycleRDR.setText(Integer.toString(progress) + "%");
+                    inputObject.controllerX1value = (short) ((progress - 50) * 655.34);
                     if (outputMode == FT311D_PWM) {
-                        pwmInterface.SetDutyCycle((byte) (outputsRudder[0] - 1), (byte) progress);
+                        pwmInterface.SetDutyCycle((byte) outputsRudder[0], (byte) progress);
                     } else if (outputMode == FT311D_UART) {
                         sk18commObject.SetPosition((byte) outputsRudder[0], (byte) progress * 10, (byte) 20);
                     } else {
-                        ch340commObject.SetPosition(outputsRudder[0], progress * 20 + 500, (byte) 100);
+                        ch340commObject.SetPositionPrecisely(outputsRudder, inputObject.controllerX1value, (byte) 100, ch340commObject.servoRudderMin, ch340commObject.servoRudderMax);
                     }
                 } else {
                     // not fromUser
@@ -896,15 +963,18 @@ Root privilege required to create or modify file by hand */
             public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
                 if (fromUser) {
                     dutyCycleAIL.setText(Integer.toString(progress) + "%");
+                    inputObject.controllerX2value = (short) ((progress - 50) * 655.34);
                     if (outputMode == FT311D_PWM) {
-                        pwmInterface.SetDutyCycle((byte) (outputsAileron[0] - 1), (byte) progress);
+                        pwmInterface.SetDutyCycle((byte) outputsAileron[0], (byte) progress);
                     } else if (outputMode == FT311D_UART) {
                         sk18commObject.SetPosition((byte) outputsAileron[0], (byte) progress * 10, (byte) 20);
                     } else {
-                        ch340commObject.SetPosition(outputsAileron[0], progress * 20 + 500, (byte) 100);
+                        ch340commObject.SetPositionPrecisely(outputsAileron, inputObject.controllerX2value, (byte) 100, 500, 2500);
                         //TODO: take flaps into account
-                        ch340commObject.SetPosition(outputsFlaperonLeft, progress * 20 + 500, (byte) 100);
-                        ch340commObject.SetPosition(outputsFlaperonRight, (100 - progress) * 20 + 500, (byte) 100);
+                        ch340commObject.SetPositionPrecisely(outputsFlaperonLeft, inputObject.controllerX2value, (byte) 100, 500, 2500);
+                        ch340commObject.SetPositionPrecisely(outputsFlaperonRight, -inputObject.controllerX2value, (byte) 100, 500, 2500);
+
+                        inputObject.mixElevons(inputObject.controllerX2value, inputObject.controllerY2value);
                     }
                 } else {
                     dutyCycleAIL.setText("A " + Byte.toString((byte) progress) + "%");
@@ -923,12 +993,15 @@ Root privilege required to create or modify file by hand */
             public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
                 if (fromUser) {
                     dutyCycleELEV.setText(Integer.toString(progress) + "%");
+                    inputObject.controllerY2value = (short) ((progress - 50) * 655.34);
                     if (outputMode == FT311D_PWM) {
-                        pwmInterface.SetDutyCycle((byte) (outputsElevator[0] - 1), (byte) progress);
+                        pwmInterface.SetDutyCycle((byte) outputsElevator[0], (byte) progress);
                     } else if (outputMode == FT311D_UART) {
                         sk18commObject.SetPosition((byte) outputsElevator[0], (byte) progress * 10, (byte) 20);
                     } else {
-                        ch340commObject.SetPosition(outputsElevator[0], progress * 20 + 500, (byte) 100);
+                        ch340commObject.SetPositionPrecisely(outputsElevator, inputObject.controllerY2value, (byte) 100, ch340commObject.servoElevatorMin, ch340commObject.servoElevatorMax);
+
+                        inputObject.mixElevons(inputObject.controllerX2value, inputObject.controllerY2value);
                     }
                 } else {
                     dutyCycleELEV.setText("A " + Byte.toString((byte) progress) + "%");
@@ -936,7 +1009,7 @@ Root privilege required to create or modify file by hand */
             }
         });
 
-		/** throttle */
+        /** throttle */
         seekbarTHROT.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
             public void onStopTrackingTouch(SeekBar seekBar) {
             }
@@ -947,13 +1020,14 @@ Root privilege required to create or modify file by hand */
             public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
                 if (fromUser) {
                     dutyCycleTHROT.setText(Integer.toString(progress) + "%");
+                    thr = (progress * ((ch340commObject.throttleMax - ch340commObject.throttleMin) / 100) + ch340commObject.throttleMin);
                     if (outputMode == FT311D_PWM) {
-                        pwmInterface.SetDutyCycle((byte) (outputsThrottle[0] - 1), (byte) progress);
+                        pwmInterface.SetDutyCycle((byte) outputsThrottle[0], (byte) progress);
                     } else if (outputMode == FT311D_UART) {
                         sk18commObject.SetPosition((byte) outputsThrottle[0], (byte) progress * 10, (byte) 20);
                     } else {
-                        thr = (progress * ((throttleMax - throttleMin) / 100) + throttleMin);
-                        ch340commObject.SetPosition(main.outputsThrottle, thr, (byte) 100);
+                        //FIXME: Why is this needed?
+                        ch340commObject.SetThrottle(outputsThrottle, (byte) 100);
                     }
                 } else {
                     // not fromUser
@@ -975,11 +1049,11 @@ Root privilege required to create or modify file by hand */
                 if (fromUser) {
                     dutyCycleELEV_L.setText(Integer.toString(progress));
                     if (outputMode == FT311D_PWM) {
-                        pwmInterface.SetDutyCycle((byte) (outputsElevonLeft[0] - 1), (byte) progress);
+                        pwmInterface.SetDutyCycle((byte) outputsElevonLeft[0], (byte) progress);
                     } else if (outputMode == FT311D_UART) {
                         sk18commObject.SetPosition((byte) outputsElevonLeft[0], (byte) progress * 10, (byte) 20);
                     } else {
-                        //TODO: USC-16
+                        ch340commObject.SetPositionPrecisely(outputsElevonLeft, (int) ((progress - 50) * 655.36), (byte) 100, ch340commObject.servoElevonMin, ch340commObject.servoElevonMax);
                     }
                 } else {
                     // not fromUser
@@ -987,7 +1061,7 @@ Root privilege required to create or modify file by hand */
             }
         });
 
-		/** right elevon */
+        /** right elevon */
         seekbarELEV_R.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
             public void onStopTrackingTouch(SeekBar seekBar) {
 
@@ -1001,57 +1075,17 @@ Root privilege required to create or modify file by hand */
                 if (fromUser) {
                     dutyCycleELEV_R.setText(Integer.toString(progress));
                     if (outputMode == FT311D_PWM) {
-                        pwmInterface.SetDutyCycle((byte) (outputsElevonRight[0] - 1), (byte) progress);
+                        pwmInterface.SetDutyCycle((byte) outputsElevonRight[0], (byte) progress);
                     } else if (outputMode == FT311D_UART) {
                         sk18commObject.SetPosition((byte) outputsElevonRight[0], (byte) progress * 10, (byte) 20);
                     } else {
-                        //TODO: USC-16
+                        ch340commObject.SetPositionPrecisely(outputsElevonRight, (int) ((progress - 50) * 655.36), (byte) 100, ch340commObject.servoElevonMin, ch340commObject.servoElevonMax);
                     }
                 } else {
                     // not fromUser
                 }
             }
         });
-        setThrottleBounds();
-    }
-
-    private void setPortNumber() {
-        AlertDialog.Builder helpBuilder = new AlertDialog.Builder(this);
-        helpBuilder.setIcon(android.R.drawable.ic_menu_manage);
-        helpBuilder.setTitle(getResources().getString(R.string.set_port_title));
-        helpBuilder.setMessage(getResources().getString(R.string.set_port_msg));
-
-        final EditText input = new EditText(this);
-        input.setSingleLine();
-        input.setInputType(InputType.TYPE_CLASS_NUMBER);
-        input.setText("");
-        helpBuilder.setView(input);
-        helpBuilder.setPositiveButton(R.string.ok, new DialogInterface.OnClickListener() {
-
-            public void onClick(DialogInterface dialog, int which) {
-
-                try {
-                    serverTCP.server_port = Integer.valueOf(input.getText().toString());
-                    SharedPreferences settings = PreferenceManager.getDefaultSharedPreferences(main);
-                    SharedPreferences.Editor editor = settings.edit();
-                    editor.putString("serverport", String.valueOf(serverTCP.server_port));
-                    editor.commit();
-
-                    serverTCP.displayAddress();
-                    // TODO reconnect
-                    serverTCP.serverSocket.close();
-                    serverTCP.serverSocket = new ServerSocket(serverTCP.server_port);
-                } catch (NumberFormatException e) {
-                    Log.d("NumberFormatException", "Error: " + e);
-                    e.printStackTrace();
-                } catch (IOException e) {
-                    e.printStackTrace();
-                    Log.d("IOException", "Error: " + e);
-                }
-            }
-        });
-        AlertDialog helpDialog = helpBuilder.create();
-        helpDialog.show();
     }
 
     private void switchOrientation() {
@@ -1141,8 +1175,8 @@ Root privilege required to create or modify file by hand */
                 helpBuilder.setMessage("Wi-Fi channel: " + channelWLAN + info.toString().replace(", ", "\n"));
             } else {
                 helpBuilder.setMessage("Wi-Fi frequency: " + info.getFrequency() + info.FREQUENCY_UNITS + "\n" +
-                "Strength: " + info.getRssi() + "dBm\n" +
-                "SSID: " + info.getSSID());
+                        "Strength: " + info.getRssi() + "dBm\n" +
+                        "SSID: " + info.getSSID());
             }
 
             helpBuilder.setPositiveButton(R.string.ok, new DialogInterface.OnClickListener() {
@@ -1165,24 +1199,53 @@ Root privilege required to create or modify file by hand */
                 .setPositiveButton(R.string.yes, new DialogInterface.OnClickListener() {
                     @Override
                     public void onClick(DialogInterface dialog, int which) {
-                        logObject.stopLog();
-
-                        if (outputMode == USC16) {
-                            if (ch340commObject.isOpen) {
-                                ch340commObject.driver.CloseDevice();
-                                ch340commObject.driver = null;
-                                ch340commObject.isOpen = false;
-                            }
-                        } else if (outputMode == FT311D_PWM) {
-                            pwmInterface.DestroyAccessory();
-                        } else if (outputMode == FT311D_UART) {
-                            uartInterface.DestroyAccessory(true);
-                        }
-                        //TODO: Must actually close activity and app.
-                        finish();
-                        System.exit(0);
+                        closeApplication();
                     }
                 }).setNegativeButton(R.string.no, null).show();
+    }
+
+    private void closeApplication() {
+        logObject.stopLog();
+
+        /** disables flash */
+        if (Build.VERSION.SDK_INT <= 20 /*Build.VERSION_CODES.KITKAT_WATCH*/) {
+            try {
+                if (camObjectKitkat.param.getFlashMode() != "FLASH_MODE_OFF")
+                    camObjectKitkat.turnOffTorch();
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+        } else {
+            camObjectLolipop.turnOffTorch();
+        }
+
+        /** closes device/accessory */
+        if (outputMode == USC16) {
+            if (ch340commObject.isOpen) {
+                ch340commObject.isOpen = false;
+                ch340commObject.driver.CloseDevice();
+                ch340commObject.driver = null;
+            }
+        } else if (outputMode == FT311D_PWM) {
+            pwmInterface.DestroyAccessory();
+        } else if (outputMode == FT311D_UART) {
+            uartInterface.DestroyAccessory(true);
+        }
+
+        /** saves rudder trim value */
+        SharedPreferences settings = PreferenceManager.getDefaultSharedPreferences(main);
+        SharedPreferences.Editor editor = settings.edit();
+        editor.putString("rudder-trim", String.valueOf(rudderTrim));
+
+        editor.putString("autopilot-proportional", Double.toString(autopilot.proportional));
+        editor.putString("autopilot-integral", Double.toString(autopilot.integral));
+        editor.putString("autopilot-derivative", Double.toString(autopilot.derivative));
+
+        editor.commit();
+
+        //TODO: Must actually close activity and app
+        finish();
+        System.exit(0);
     }
 
     private void showOptions() {
@@ -1197,12 +1260,9 @@ Root privilege required to create or modify file by hand */
         startActivity(browserIntent);
     }
 
-    protected boolean shouldAskPermissions() {
-        return (Build.VERSION.SDK_INT > 22 /*Build.VERSION_CODES.LOLLIPOP_MR1*/);
-    }
-
     protected void askPermissions() {
         String[] permissions = {
+                "android.permission.INTERNET",
                 "android.permission.CAMERA",
                 "android.permission.RECORD_AUDIO",
                 "android.permission.READ_EXTERNAL_STORAGE",
@@ -1284,25 +1344,35 @@ Root privilege required to create or modify file by hand */
             case FORMAT_ASCII:
             default:
                 update.updateConversationHandler.post(new updateTextThread(text_feedback, uartInterface.readSB.toString()));
-            break;
+                break;
         }
     }
 
-    @Override
-    public void onStart() {
-        super.onStart();
-    }
-
-    /** one integer */
-    void sendTelemetry(int number, int value) {
+    /**
+     * one boolean
+     */
+    void sendTelemetry(int number, boolean value) {
         if (protocol == 0x01) {
-            //TODO: write method for sending one integer through TCP
+            //TODO write method for sending one boolean through TCP
         } else {
             serverUDP.send((byte) number, value);
         }
     }
 
-    /** two shorts */
+    /**
+     * one short
+     */
+    void sendTelemetry(int number, short value) {
+        if (protocol == 0x01) {
+            //TODO: write method for sending one short through TCP
+        } else {
+            serverUDP.send((byte) number, value);
+        }
+    }
+
+    /**
+     * two shorts
+     */
     void sendTelemetry(int number, short short1, short short2) {
         if (protocol == 0x01) {
             serverTCP.send((byte) number, short1, short2);
@@ -1311,7 +1381,9 @@ Root privilege required to create or modify file by hand */
         }
     }
 
-    /** one float */
+    /**
+     * one float
+     */
     void sendTelemetry(int number, float value) {
         if (protocol == 0x01) {
             serverTCP.send((byte) number, value);
@@ -1320,7 +1392,9 @@ Root privilege required to create or modify file by hand */
         }
     }
 
-    /** an array of floats */
+    /**
+     * an array of floats
+     */
     void sendTelemetry(int number, float[] value) {
         if (protocol == 0x01) {
             //TODO: write method for sending array of floats through TCP
@@ -1329,12 +1403,113 @@ Root privilege required to create or modify file by hand */
         }
     }
 
-    /** array of doubles */
+    /**
+     * an array of doubles
+     */
     void sendTelemetry(int number, double[] coordinates) {
         if (protocol == 0x01) {
             //TODO: write method for sending array of doubles through TCP
         } else {
             serverUDP.send((byte) number, coordinates);
+        }
+    }
+
+    private void enable_altitude_spoofing() {
+        LinearLayout mainVertical = findViewById(R.id.main_vertical);
+        LinearLayout linearLayoutTest = new LinearLayout(this);
+        dutyCycleTEST = new TextView(this);
+        linearLayoutTest.addView(dutyCycleTEST, 0);
+        WindowManager.LayoutParams paramsLayout = new WindowManager.LayoutParams();
+        paramsLayout.width = WindowManager.LayoutParams.WRAP_CONTENT;
+        paramsLayout.height = WindowManager.LayoutParams.WRAP_CONTENT;
+        linearLayoutTest.setLayoutParams(paramsLayout);
+        mainVertical.addView(linearLayoutTest, 7);
+        seekbarTEST = new SeekBar(this);
+        WindowManager.LayoutParams paramsSeekbar = new WindowManager.LayoutParams();
+        paramsSeekbar.width = 960;
+        paramsSeekbar.height = WindowManager.LayoutParams.WRAP_CONTENT;
+        paramsSeekbar.gravity = android.view.Gravity.END;
+        seekbarTEST.setLayoutParams(paramsSeekbar);
+        seekbarTEST.setProgress(50);
+        dutyCycleTEST.setText("50%");
+        linearLayoutTest.addView(seekbarTEST, 1);
+        autopilot.target_altitude = 150;
+        autopilot.fakeAltitude = true;
+
+        seekbarTEST.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
+            public void onStopTrackingTouch(SeekBar seekBar) {
+            }
+
+            public void onStartTrackingTouch(SeekBar seekBar) {
+            }
+
+            public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
+                if (fromUser) {
+                    dutyCycleTEST.setText(Integer.toString(progress) + "%");
+                    /** for testing */
+                    if (autopilot.fakeAltitude) {
+                        pressureObject.altitudeBarometricRecent = 100 + progress;
+                    }
+                } else {
+                    // not fromUser
+                }
+            }
+        });
+    }
+
+    private void disable_altitude_spoofing() {
+        LinearLayout mainVertical = findViewById(R.id.main_vertical);
+        LinearLayout linearLayoutTest = (LinearLayout) mainVertical.getChildAt(7);
+        linearLayoutTest.setVisibility(View.GONE);
+        seekbarTEST = null;
+        autopilot.fakeAltitude = false;
+    }
+
+    private void toggle_altitude_spoofing() {
+        if (autopilot.fakeAltitude) {
+            disable_altitude_spoofing();
+        } else {
+            enable_altitude_spoofing();
+        }
+    }
+
+    /**
+     * USB input data handler
+     */
+    private class handler_thread extends Thread {
+        Handler mHandler;
+
+        handler_thread(Handler h) {
+            mHandler = h;
+        }
+
+        public void run() {
+            Message msg;
+            while (true) {
+                try {
+                    Thread.sleep(200);
+                } catch (InterruptedException e) {
+                }
+
+                uartInterface.status = uartInterface.ReadData(4096, uartInterface.readBufferFB, uartInterface.actualNumBytes);
+
+                if (uartInterface.status == 0x00 && uartInterface.actualNumBytes[0] > 0) {
+                    msg = mHandler.obtainMessage();
+                    mHandler.sendMessage(msg);
+                }
+            }
+        }
+    }
+
+    class DelayedInitiateDeviceThread implements Runnable {
+        @SuppressWarnings("all")
+        public void run() {
+            try {
+                Thread.sleep(500);
+                initiateCH340();
+            } catch (InterruptedException e) {
+                e.printStackTrace();
+            }
         }
     }
 }
