@@ -33,7 +33,7 @@ public class Accelerometer {
         accVectorDevice[1] = event.values[1];
         accVectorDevice[2] = event.values[2];
 
-		/* rotates the vector by angle between device (smartphone/tablet) and vehicle (UAV) orientation */
+        /* rotates the vector by angle between device (smartphone/tablet) and vehicle (UAV) orientation */
         accVectorVehicle = rotateAroundZ(accVectorDevice, main.device_orientation[2]);
 
         angle_roll = Math.toDegrees(Math.atan2((double) accVectorVehicle[0], (double) accVectorVehicle[2]));
@@ -86,8 +86,7 @@ public class Accelerometer {
             output[0] = -input[0];
             output[1] = -input[1];
             output[2] = input[2];
-        }
-        else {
+        } else {
 /*
 ┌			   ┐┌ ┐ ┌			  ┐
 │cosΦ┆-sinΦ┆ 0 ││x│ │cosΦx - sinΦy│
