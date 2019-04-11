@@ -1,6 +1,7 @@
 package pl.bezzalogowe.PhoneUAV;
 
 import android.util.Log;
+
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -13,18 +14,18 @@ import java.net.SocketException;
 import java.util.Enumeration;
 
 public class ServerTCP {
-/**
-<p>
-Size of Ethernet frame: 24 Bytes
-Size of IPv4 Header (without any options): 20 Bytes
-
-Size of TCP Header (without any options): 20 Bytes
-So total size of empty TCP datagram: 24 + 20 + 20 = 64 Bytes
-
-Size of UDP header: 8 bytes
-So total size of empty UDP datagram: 24 + 20 + 8 = 52 Bytes
-</p>
-*/
+    /**
+     * <p>
+     * Size of Ethernet frame: 24 Bytes
+     * Size of IPv4 Header (without any options): 20 Bytes
+     * <p>
+     * Size of TCP Header (without any options): 20 Bytes
+     * So total size of empty TCP datagram: 24 + 20 + 20 = 64 Bytes
+     * <p>
+     * Size of UDP header: 8 bytes
+     * So total size of empty UDP datagram: 24 + 20 + 8 = 52 Bytes
+     * </p>
+     */
 
     private static final String TAG = "network";
     public int server_port = 6000;
@@ -38,7 +39,7 @@ So total size of empty UDP datagram: 24 + 20 + 8 = 52 Bytes
 
     public static String getLocalIpAddress() {
         try {
-for (Enumeration<NetworkInterface> en = NetworkInterface.getNetworkInterfaces(); en.hasMoreElements(); ) {
+            for (Enumeration<NetworkInterface> en = NetworkInterface.getNetworkInterfaces(); en.hasMoreElements(); ) {
                 NetworkInterface intf = en.nextElement();
                 for (Enumeration<InetAddress> enumIpAddr = intf
                         .getInetAddresses(); enumIpAddr.hasMoreElements(); ) {
@@ -55,37 +56,37 @@ for (Enumeration<NetworkInterface> en = NetworkInterface.getNetworkInterfaces();
         return null;
     }
 
-public void displayAddress() {
-    if (getLocalIpAddress() != null) {
-        main.update.updateConversationHandler.post(new updateTextThread(main.text_server, getLocalIpAddress() + ":" + server_port + " \n"));
-    } else {
-        main.text_server.setText("Offline");
+    public void displayAddress() {
+        if (getLocalIpAddress() != null) {
+            main.update.updateConversationHandler.post(new updateTextThread(main.text_server, getLocalIpAddress() + ":" + server_port + " \n"));
+        } else {
+            main.text_server.setText("Offline");
+        }
     }
-}
 
-public void send(int number, int value) {
-    /** Sends one integer */
+    public void send(int number, int value) {
+        /** Sends one integer */
 
-    if (output != null) {
-        try {
+        if (output != null) {
+            try {
 
-            byte[] buffer = {(byte) number,
-                    (byte) (value >> 24),
-                    (byte) (value >> 16),
-                    (byte) (value >> 8),
-                    (byte) (value >> 0)};
+                byte[] buffer = {(byte) number,
+                        (byte) (value >> 24),
+                        (byte) (value >> 16),
+                        (byte) (value >> 8),
+                        (byte) (value >> 0)};
 /*
 >>	signed right shift
 >>>	unsigned right shift
 */
-            output.write(buffer);
-            main.update.updateConversationHandler.post(new updateTextThread(main.text_server, "Feedback: " + Integer.toString(number) + ", " + Integer.toString(value)));
-        } catch (IOException e) {
-            e.printStackTrace();
-            Log.d(TAG, "Could not send feedback: " + e);
+                output.write(buffer);
+                main.update.updateConversationHandler.post(new updateTextThread(main.text_server, "Feedback: " + Integer.toString(number) + ", " + Integer.toString(value)));
+            } catch (IOException e) {
+                e.printStackTrace();
+                Log.d(TAG, "Could not send feedback: " + e);
+            }
         }
     }
-}
 
     public void send(byte number, short value1, short value2) {
         /** Sends two shorts */
@@ -161,7 +162,6 @@ public void send(int number, int value) {
                         Log.d(TAG, "Bytes read: " + bytesread);
                         main.inputObject.process(data);
                     } else if (bytesread == 0) {
-                        // System.out.println("Bytes read: " + bytesread);
                         Log.d(TAG, "Bytes read: " + bytesread);
                     } else {
                         main.update.updateConversationHandler.post(new updateTextThread(main.text_server, "End of stream"));
