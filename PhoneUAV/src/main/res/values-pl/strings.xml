@@ -16,13 +16,21 @@
 	
 	<string name="duty_cycle">Wartość (%)</string>
 	<string name="degree">stopni</string>
+    <string name="get_info">getInfo</string>
+    <string name="alt_spoof">Fałszywa wysokość</string>
     <string name="options">Opcje</string>
     <string name="help">Pomoc</string>
     <string name="pref_period_title">Okres (PWM)</string>
     <string name="switch_orientation_title">Obróć</string>
     <string name="set_channel_order">Kolejność kanałów:</string>
-    <string name="pref_title_throttle_min">Ciąg min</string>
-    <string name="pref_title_throttle_max">Ciąg max</string>
+    <string name="pref_servo_elevator_min">Ster wys. min</string>
+    <string name="pref_servo_elevator_max">Ster wys. max</string>
+    <string name="pref_servo_rudder_min">Ster kier. min</string>
+    <string name="pref_servo_rudder_max">Ster kier. max</string>
+    <string name="pref_servo_elevon_min">Sterolotka min</string>
+    <string name="pref_servo_elevon_max">Sterolotka max</string>
+    <string name="pref_throttle_min">Ciąg min</string>
+    <string name="pref_throttle_max">Ciąg max</string>
 
     <string name="save_title">Zapisz</string>
     <string name="period_label">T (ms):</string>
@@ -62,6 +70,7 @@
     <string name="set_port_title">Port</string>
     <string name="set_port_msg">Wprowadź numer portu:</string>
     <string name="set_path_title">\u015Acie\u017Cka serwera</string>
+    <string name="set_email_title">Odbiorcy e-maili</string>
 
     <!-- Example settings for Notifications -->
     <string name="pref_header_notifications">Powiadomienia</string>
