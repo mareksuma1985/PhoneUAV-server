@@ -5,6 +5,7 @@ import android.os.Handler;
 import android.view.View;
 import android.widget.CheckBox;
 import android.widget.SeekBar;
+import android.widget.Toast;
 import android.widget.TextView;
 
 public class UpdateUI {
@@ -69,6 +70,33 @@ class updateProgressThread implements Runnable {
     @Override
     public void run() {
         view.setProgress(pos);
+    }
+}
+
+class updateToastThread implements Runnable {
+    private MainActivity context;
+    private String msg;
+    private int length;
+
+    public updateToastThread(MainActivity activity, String str) {
+        this.context = activity;
+        this.msg = str;
+    }
+
+    public updateToastThread(MainActivity activity, String str, boolean iflong) {
+        this.context = activity;
+        this.msg = str;
+
+        if (iflong == true) {
+            this.length = Toast.LENGTH_LONG;
+        } else {
+            this.length = Toast.LENGTH_SHORT;
+        }
+    }
+
+    @Override
+    public void run() {
+        Toast.makeText(context, msg, length).show();
     }
 }
 
