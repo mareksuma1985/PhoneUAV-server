@@ -44,7 +44,7 @@ public class SK18comm {
                 "\nstopBit: " + stopBit +
                 "\ndataBit: " + dataBit +
                 "\nparity: " + parity +
-                "\nflowControl: " + flowControl);
+                 "\nflowControl: " + flowControl);
     }
 
     public void startPWM(MainActivity argActivity, int value) {
@@ -73,7 +73,7 @@ public class SK18comm {
         main = argActivity;
         main.seekbarTHROT.setAlpha((float) 0.5);
 
-        SetPosition(4, main.throttleMin, (byte) 4);
+        SetPosition(4, main.ch340commObject.throttleMin, (byte) 4);
         executor.shutdownNow();
         try {
             if (executor.isShutdown()) {
@@ -116,9 +116,7 @@ public class SK18comm {
         }
     }
 
-    /**
-     * Threads work both for 1-1000 and 500-2500 ms range.
-     */
+    /** Threads work both for 1-1000 and 500-2500 μs range. */
 
     class ThrottleDown implements Runnable {
         @Override
@@ -126,8 +124,8 @@ public class SK18comm {
             try {
                 main.update.updateConversationHandler.post(new updateTextThread(main.text_server, "Throttling down..."));
                 main.logObject.saveComment("Throttling down");
-                main.thr = main.throttleMax;
-                while (main.thr > main.throttleMin) {
+                main.thr = main.ch340commObject.throttleMax;
+                while (main.thr > main.ch340commObject.throttleMin) {
                     Thread.sleep(20);
                     main.thr -= 40;
                     /* decrease by 40 every 20 milliseconds */
@@ -154,8 +152,8 @@ public class SK18comm {
             try {
                 main.update.updateConversationHandler.post(new updateTextThread(main.text_server, "Throttling up..."));
                 main.logObject.saveComment("Throttling up");
-                main.thr = main.throttleMin;
-                while (main.thr < main.throttleMax) {
+                main.thr = main.ch340commObject.throttleMin;
+                while (main.thr < main.ch340commObject.throttleMax) {
                     Thread.sleep(20);
                     main.thr += 40;
                     /* increase by 40 every 20 milliseconds */

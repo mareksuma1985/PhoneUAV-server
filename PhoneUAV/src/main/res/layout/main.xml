@@ -240,6 +240,80 @@
             android:indeterminate="false" />
     </LinearLayout>
 
+    <!-- elevon left (flying wing) -->
+    <LinearLayout
+        android:layout_width="fill_parent"
+        android:layout_height="fill_parent"
+        android:layout_margin="3dip"
+        android:layout_weight="1"
+        android:background="#505050"
+        android:visibility="gone">
+
+        <TextView
+            android:id="@+id/SeekbarElevonLeftLabel"
+            android:layout_width="55dp"
+            android:layout_height="fill_parent"
+            android:layout_margin="3dip"
+            android:gravity="left"
+            android:text="@string/ch_elevon_left"></TextView>
+
+        <TextView
+            android:id="@+id/DutyElevonLeftText"
+            android:layout_width="50dp"
+            android:layout_height="fill_parent"
+            android:layout_margin="3dip"
+            android:gravity="right"
+            android:text="0" />
+
+        <SeekBar
+            android:id="@+id/SeekbarElevonLeft"
+            style="@style/CustomSlider"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_margin="2dip"
+            android:layout_weight="4"
+            android:gravity="center"
+            android:max="100"
+            android:progress="0" />
+    </LinearLayout>
+
+    <!-- elevon right (flying wing) -->
+    <LinearLayout
+        android:layout_width="fill_parent"
+        android:layout_height="fill_parent"
+        android:layout_margin="3dip"
+        android:layout_weight="1"
+        android:background="#505050"
+        android:visibility="gone">
+
+        <TextView
+            android:id="@+id/SeekbarElevonRightLabel"
+            android:layout_width="55dp"
+            android:layout_height="fill_parent"
+            android:layout_margin="3dip"
+            android:gravity="left"
+            android:text="@string/ch_elevon_right"></TextView>
+
+        <TextView
+            android:id="@+id/DutyCycleElevonRightText"
+            android:layout_width="50dp"
+            android:layout_height="fill_parent"
+            android:layout_margin="3dip"
+            android:gravity="right"
+            android:text="0" />
+
+        <SeekBar
+            android:id="@+id/SeekbarElevonRight"
+            style="@style/CustomSlider"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_margin="2dip"
+            android:layout_weight="4"
+            android:gravity="center"
+            android:max="100"
+            android:progress="0" />
+    </LinearLayout>
+
     <LinearLayout
         android:id="@+id/LastRow"
         android:layout_width="fill_parent"
