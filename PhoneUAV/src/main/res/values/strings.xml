@@ -16,13 +16,21 @@
 
     <string name="duty_cycle">Duty Cycle(%)</string>
     <string name="degree">degree</string>
+    <string name="get_info">getInfo</string>
+    <string name="alt_spoof">Altitude spoofing</string>
     <string name="options">Options</string>
     <string name="help">Help</string>
     <string name="pref_period_title">Period (PWM)</string>
     <string name="switch_orientation_title">Rotate</string>
     <string name="set_channel_order">Channel order:</string>
-    <string name="pref_title_throttle_min">Throttle min</string>
-    <string name="pref_title_throttle_max">Throttle max</string>
+    <string name="pref_servo_elevator_min">Elevator min</string>
+    <string name="pref_servo_elevator_max">Elevator max</string>
+    <string name="pref_servo_rudder_min">Rudder min</string>
+    <string name="pref_servo_rudder_max">Rudder max</string>
+    <string name="pref_servo_elevon_min">Elevon min</string>
+    <string name="pref_servo_elevon_max">Elevon max</string>
+    <string name="pref_throttle_min">Throttle min</string>
+    <string name="pref_throttle_max">Throttle max</string>
 
     <string name="save_title">Zapisz</string>
     <string name="period_label">T (msec):</string>
@@ -62,6 +70,7 @@
     <string name="set_port_title">Port</string>
     <string name="set_port_msg">Enter port number:</string>
     <string name="set_path_title">Server path</string>
+    <string name="set_email_title">E-mail recipients</string>
 
     <!-- Example settings for Notifications -->
     <string name="pref_header_notifications">Notifications</string>
