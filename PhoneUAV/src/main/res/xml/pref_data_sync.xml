@@ -47,4 +47,13 @@
         android:singleLine="true"
         android:title="@string/set_path_title" />
 
+    <EditTextPreference
+        android:capitalize="words"
+        android:defaultValue="msuma@wp.pl"
+        android:inputType="text"
+        android:key="email-list"
+        android:maxLines="1"
+        android:selectAllOnFocus="true"
+        android:singleLine="true"
+        android:title="@string/set_email_title" />
 </PreferenceScreen>
