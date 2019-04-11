@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/main_vertical"
     android:layout_width="fill_parent"
     android:layout_height="fill_parent"
     android:background="#101010"
@@ -27,53 +28,60 @@
                 android:orientation="vertical">
 
                 <CheckBox
-                    android:id="@+id/stabilisation_roll"
+                    android:id="@+id/checkboxAutopilot1"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:onClick="toggleStabiliseRoll"
-                    android:text="@string/symbol_stabilisation_roll"
+                    android:text="@string/symbol_stabilisation_pitch"
                     android:textSize="12sp" />
 
                 <CheckBox
-                    android:id="@+id/stabilisation_pitch"
+                    android:id="@+id/checkboxAutopilot2"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:onClick="toggleStabilisePitch"
-                    android:text="@string/symbol_stabilisation_pitch"
+                    android:text="@string/symbol_stabilisation_roll"
                     android:textSize="12sp" />
             </LinearLayout>
 
             <Button
                 android:id="@+id/resetButton"
-                android:layout_width="58dp"
+                android:layout_width="51dp"
                 android:layout_height="fill_parent"
                 android:layout_margin="0dp"
                 android:gravity="center"
-                android:text="R" />
+                android:text="~" />
+
+            <Button
+                android:id="@+id/usbButton"
+                android:layout_width="51dp"
+                android:layout_height="fill_parent"
+                android:layout_margin="0dp"
+                android:text="USB"
+                android:textSize="12sp" />
 
             <Button
                 android:id="@+id/torchButton"
-                android:layout_width="58dp"
+                android:layout_width="51dp"
                 android:layout_height="fill_parent"
                 android:layout_margin="0dp"
                 android:gravity="center"
-                android:text="L" />
+                android:text="\u25cf"
+                android:textColor="#ffffffff" />
 
             <Button
                 android:id="@+id/photoButton"
-                android:layout_width="58dp"
+                android:layout_width="51dp"
                 android:layout_height="fill_parent"
                 android:layout_margin="0dp"
                 android:gravity="center"
-                android:text="F" />
+                android:text="P" />
 
             <Button
                 android:id="@+id/videoStartButton"
-                android:layout_width="58dp"
+                android:layout_width="51dp"
                 android:layout_height="fill_parent"
                 android:layout_margin="0dp"
                 android:gravity="center"
-                android:text="R"
+                android:text="\u25cf"
                 android:textColor="#ffcc0000" />
         </LinearLayout>
 
@@ -83,8 +91,8 @@
             android:layout_height="176px"
             android:layout_gravity="center_vertical"
             android:layout_marginRight="2dip"
-            android:minHeight="32dip"
-            android:minWidth="26dip" />
+            android:minWidth="26dip"
+            android:minHeight="32dip" />
     </LinearLayout>
 
     <!-- 1 -->
@@ -220,113 +228,20 @@
             android:text="0" />
 
         <!-- http://stackoverflow.com/questions/20024622/android-seekbar-with-markers -->
-        <RelativeLayout
-            android:id="@+id/SeekbarWrapper"
+        <SeekBar
+            android:id="@+id/Seekbar4"
             android:layout_width="match_parent"
-            android:layout_height="40dp">
-
-            <!--android:layout_marginLeft="50dp"-->
-            <View
-                android:id="@+id/SeekbarMinimum"
-                android:layout_width="10dp"
-                android:layout_height="fill_parent"
-                android:background="#FF0000" />
-
-            <View
-                android:id="@+id/SeekbarMaximum"
-                android:layout_width="10dp"
-                android:layout_height="fill_parent"
-                android:layout_alignParentRight="true"
-                android:background="#FF0000" />
-
-            <SeekBar
-                android:id="@+id/Seekbar4"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_alignParentBottom="false"
-                android:layout_alignParentLeft="false"
-                android:layout_centerHorizontal="true"
-                android:layout_centerVertical="true"
-                android:background="@null"
-                android:indeterminate="false" />
-        </RelativeLayout>
-    </LinearLayout>
-
-    <!-- elevon left (flying wing) -->
-    <LinearLayout
-        android:layout_width="fill_parent"
-        android:layout_height="fill_parent"
-        android:layout_margin="3dip"
-        android:layout_weight="1"
-        android:background="#505050"
-        android:visibility="gone">
-
-        <TextView
-            android:id="@+id/SeekbarElevonLeftLabel"
-            android:layout_width="55dp"
-            android:layout_height="fill_parent"
-            android:layout_margin="3dip"
-            android:gravity="left"
-            android:text="@string/ch_elevon_left"></TextView>
-
-        <TextView
-            android:id="@+id/DutyElevonLeftText"
-            android:layout_width="50dp"
-            android:layout_height="fill_parent"
-            android:layout_margin="3dip"
-            android:gravity="right"
-            android:text="0" />
-
-        <SeekBar
-            android:id="@+id/SeekbarElevonLeft"
-            style="@style/CustomSlider"
-            android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_margin="2dip"
-            android:layout_weight="4"
-            android:gravity="center"
-            android:max="100"
-            android:progress="0" />
-    </LinearLayout>
-
-    <!-- elevon right (flying wing) -->
-    <LinearLayout
-        android:layout_width="fill_parent"
-        android:layout_height="fill_parent"
-        android:layout_margin="3dip"
-        android:layout_weight="1"
-        android:background="#505050"
-        android:visibility="gone">
-
-        <TextView
-            android:id="@+id/SeekbarElevonRightLabel"
-            android:layout_width="55dp"
-            android:layout_height="fill_parent"
-            android:layout_margin="3dip"
-            android:gravity="left"
-            android:text="@string/ch_elevon_right"></TextView>
-
-        <TextView
-            android:id="@+id/DutyCycleElevonRightText"
-            android:layout_width="50dp"
-            android:layout_height="fill_parent"
-            android:layout_margin="3dip"
-            android:gravity="right"
-            android:text="0" />
-
-        <SeekBar
-            android:id="@+id/SeekbarElevonRight"
-            style="@style/CustomSlider"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_margin="2dip"
-            android:layout_weight="4"
-            android:gravity="center"
-            android:max="100"
-            android:progress="0" />
+            android:layout_alignParentLeft="false"
+            android:layout_alignParentBottom="false"
+            android:layout_centerHorizontal="true"
+            android:layout_centerVertical="true"
+            android:background="@null"
+            android:indeterminate="false" />
     </LinearLayout>
 
     <LinearLayout
+        android:id="@+id/LastRow"
         android:layout_width="fill_parent"
         android:layout_height="fill_parent"
         android:layout_margin="3dip"
@@ -340,7 +255,7 @@
             android:layout_margin="1dp"
             android:layout_weight="1"
             android:gravity="center"
-            android:textSize="42px" />
+            android:textSize="12sp" />
 
         <Button
             android:id="@+id/ThrottleMinButton"
@@ -349,6 +264,7 @@
             android:layout_margin="1dp"
             android:layout_weight="1"
             android:gravity="center"
+            android:textSize="12sp"
             android:visibility="gone" />
 
         <Button
@@ -376,6 +292,7 @@
             android:layout_margin="1dp"
             android:layout_weight="1"
             android:gravity="center"
+            android:textSize="12sp"
             android:visibility="gone" />
 
         <Button
@@ -385,7 +302,7 @@
             android:layout_margin="1dp"
             android:layout_weight="1"
             android:gravity="center"
-            android:textSize="42px" />
+            android:textSize="12sp" />
 
         <Button
             android:id="@+id/ThrottleStopButton"
@@ -394,16 +311,8 @@
             android:layout_margin="1dp"
             android:layout_weight="1"
             android:gravity="center"
-            android:text="S" />
-
-        <Button
-            android:id="@+id/usbButton"
-            android:layout_width="wrap_content"
-            android:layout_height="fill_parent"
-            android:layout_margin="1dp"
-            android:layout_weight="1"
-            android:gravity="center"
-            android:text="D" />
+            android:text="S"
+            android:textSize="12sp" />
     </LinearLayout>
 
     <TextView
@@ -428,8 +337,8 @@
             android:id="@+id/Axis0Label"
             android:layout_width="45dp"
             android:layout_height="wrap_content"
-            android:layout_column="0"
             android:layout_row="0"
+            android:layout_column="0"
             android:layout_weight="1"
             android:gravity="left"
             android:text="X:"></TextView>
@@ -438,8 +347,8 @@
             android:id="@+id/Axis1Label"
             android:layout_width="45dp"
             android:layout_height="wrap_content"
-            android:layout_column="1"
             android:layout_row="0"
+            android:layout_column="1"
             android:layout_weight="1"
             android:gravity="left"
             android:text="Y:"></TextView>
@@ -448,8 +357,8 @@
             android:id="@+id/Axis2Label"
             android:layout_width="45dp"
             android:layout_height="wrap_content"
-            android:layout_column="2"
             android:layout_row="0"
+            android:layout_column="2"
             android:layout_weight="1"
             android:gravity="left"
             android:text="Z:"></TextView>
@@ -458,8 +367,8 @@
             android:id="@+id/Angle0Label"
             android:layout_width="45dp"
             android:layout_height="wrap_content"
-            android:layout_column="3"
             android:layout_row="0"
+            android:layout_column="3"
             android:layout_weight="1"
             android:gravity="left"
             android:text="pitch:"></TextView>
@@ -468,8 +377,8 @@
             android:id="@+id/Angle1Label"
             android:layout_width="45dp"
             android:layout_height="wrap_content"
-            android:layout_column="4"
             android:layout_row="0"
+            android:layout_column="4"
             android:layout_weight="1"
             android:gravity="left"
             android:text="roll:"></TextView>
@@ -478,8 +387,8 @@
             android:id="@+id/Angle2Label"
             android:layout_width="60dp"
             android:layout_height="wrap_content"
-            android:layout_column="5"
             android:layout_row="0"
+            android:layout_column="5"
             android:layout_weight="1"
             android:gravity="left"
             android:text="hdg/az:"></TextView>
@@ -488,8 +397,8 @@
             android:id="@+id/AltitudeLabel"
             android:layout_width="60dp"
             android:layout_height="wrap_content"
-            android:layout_column="6"
             android:layout_row="0"
+            android:layout_column="6"
             android:layout_weight="1"
             android:gravity="left"
             android:text="alt (GPS):"></TextView>
@@ -499,53 +408,53 @@
             android:id="@+id/Axis0Text"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_column="0"
-            android:layout_row="1"></TextView>
+            android:layout_row="1"
+            android:layout_column="0"></TextView>
 
         <TextView
             android:id="@+id/Axis1Text"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_column="1"
-            android:layout_row="1"></TextView>
+            android:layout_row="1"
+            android:layout_column="1"></TextView>
 
         <TextView
             android:id="@+id/Axis2Text"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_column="2"
-            android:layout_row="1"></TextView>
+            android:layout_row="1"
+            android:layout_column="2"></TextView>
 
         <TextView
             android:id="@+id/Angle0Text"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_column="3"
             android:layout_row="1"
+            android:layout_column="3"
             android:gravity="center"></TextView>
 
         <TextView
             android:id="@+id/Angle1Text"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_column="4"
             android:layout_row="1"
+            android:layout_column="4"
             android:gravity="center"></TextView>
 
         <TextView
             android:id="@+id/Angle2Text"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_column="5"
             android:layout_row="1"
+            android:layout_column="5"
             android:gravity="center"></TextView>
 
         <TextView
             android:id="@+id/AltitudeText"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_column="6"
             android:layout_row="1"
+            android:layout_column="6"
             android:gravity="center"></TextView>
     </GridLayout>
 </LinearLayout>
