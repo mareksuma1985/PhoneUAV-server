@@ -19,6 +19,7 @@
     <string name="get_info">getInfo</string>
     <string name="alt_spoof">Altitude spoofing</string>
     <string name="options">Options</string>
+    <string name="close">Close</string>
     <string name="help">Help</string>
     <string name="pref_period_title">Period (PWM)</string>
     <string name="switch_orientation_title">Rotate</string>
@@ -32,6 +33,9 @@
     <string name="pref_throttle_min">Throttle min</string>
     <string name="pref_throttle_max">Throttle max</string>
 
+    <string name="show_ip">Show IP</string>
+    <string name="show_info">Show WiFi info</string>
+
     <string name="save_title">Zapisz</string>
     <string name="period_label">T (msec):</string>
 
@@ -40,6 +44,9 @@
 
     <string name="confirmation_title">Confirmation</string>
     <string name="confirmation_msg">Are you sure you want to exit?</string>
+
+    <string name="permission_title">Displaying preview</string>
+    <string name="permission_content">The app must be restarted after granting camera permission.</string>
 
     <!-- Strings related to Settings -->
     <!-- General settings -->
@@ -70,7 +77,9 @@
     <string name="set_port_title">Port</string>
     <string name="set_port_msg">Enter port number:</string>
     <string name="set_path_title">Server path</string>
-    <string name="set_email_title">E-mail recipients</string>
+    <string name="set_email_from">E-mail from</string>
+    <string name="set_email_password">E-mail password</string>
+    <string name="set_email_recipients">E-mail recipients</string>
 
     <!-- Example settings for Notifications -->
     <string name="pref_header_notifications">Notifications</string>

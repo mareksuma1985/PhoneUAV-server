@@ -27,7 +27,7 @@ public class CH340comm {
     public byte[] readBuffer = new byte[512];
     public readThread handlerThread;
     public boolean isOpen;
-    
+
     /** 500 to 2500 μs pulse width range for servos */
 
     public int servoElevatorMin = 700;
@@ -36,18 +36,21 @@ public class CH340comm {
     public int servoRudderMax = 2500;
     public int servoElevonMin = 500;
     public int servoElevonMax = 2500;
-    
-    /** http://www.wch.cn/download/CH341SER_ANDROID_ZIP.html */
 
-    MainActivity main;
-    boolean pwmThread = false;
-    
     /** 1000 to 2000 μs pulse width range for ESC */
     int throttleMin = 1000;
     int throttleMax = 2000;
     float throttleDenominator;
 
     ScheduledExecutorService executor, executorBlink;
+    boolean pwmThread = false;
+
+    /** http://www.wch.cn/download/CH341SER_ANDROID_ZIP.html */
+
+    MainActivity main;
+    public  CH340comm(MainActivity argActivity) {
+        main = argActivity;
+    }
 
     Handler handler = new Handler() {
         public void handleMessage(Message msg) {
@@ -83,17 +86,20 @@ public class CH340comm {
         return new byte[]{};
     }
 
-    public void open(MainActivity argActivity) {
-        main = argActivity;
+    public void open() {
         int retval;
         if (!isOpen) {
             driver = new CH34xUARTDriver((UsbManager) main.getSystemService(main.USB_SERVICE), main, ACTION_USB_PERMISSION);
             retval = driver.ResumeUsbList();
             if (retval == -1) {
+                main.logObject.saveComment("error: " + "Open device failed!");
+
                 main.update.updateConversationHandler.post(new updateTextThread(main.text_server, "Open device failed!"));
                 driver.CloseDevice();
             } else if (retval == 0) {
                 if (!driver.UartInit()) {
+                    main.logObject.saveComment("error: " + "Device initialization failed!");
+
                     main.update.updateConversationHandler.post(new updateTextThread(main.text_server, "Device initialization failed!"));
                     return;
                 }
@@ -106,20 +112,29 @@ public class CH340comm {
                 main.usbButton.setText("USB\n\"0\"");
                 isOpen = true;
                 new readThread().start();
+
+                /** sends feedback */
+                Thread feedbackC340Thread = new Thread(new Wrap());
+                feedbackC340Thread.start();
             } else {
-                main.update.updateConversationHandler.post(new updateTextThread(main.text_server, "ResumeUsbList > 0"));
+                main.logObject.saveComment("error: " + "ResumeUsbList == " + retval);
+
+                main.update.updateConversationHandler.post(new updateTextThread(main.text_server, "ResumeUsbList == " + retval));
             }
-        } else {
+        }
+    }
+
+    public void close()
+    {
+        if (isOpen) {
+            main.logObject.saveComment("error: " + "Disconnected");
+
             main.update.updateConversationHandler.post(new updateTextThread(main.text_server, "Disconnected"));
             main.usbButton.setText("USB\n\"1\"");
             driver.CloseDevice();
             driver = null;
             isOpen = false;
         }
-
-        /** sends feedback */
-        Thread feedbackC340Thread = new Thread(new Wrap());
-        feedbackC340Thread.start();
     }
 
     public void config() {
@@ -134,6 +149,8 @@ public class CH340comm {
             main.update.updateConversationHandler.post(new updateTextThread(main.text_server, "Serial settings are successful!"));
             main.outputMode = main.USC16;
         } else {
+            main.logObject.saveComment("error: " + "Serial settings failed!");
+
             main.update.updateConversationHandler.post(new updateTextThread(main.text_server, "Serial settings failed!"));
         }
     }

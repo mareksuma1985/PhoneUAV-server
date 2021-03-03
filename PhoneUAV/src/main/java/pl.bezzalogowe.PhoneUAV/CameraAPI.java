@@ -1,6 +1,7 @@
 package pl.bezzalogowe.PhoneUAV;
 
 import android.app.Activity;
+import android.graphics.Color;
 import android.util.Log;
 import android.graphics.SurfaceTexture;
 import android.hardware.Camera;
@@ -13,6 +14,7 @@ import android.media.ExifInterface;
 import android.media.MediaRecorder;
 import android.os.Environment;
 import android.view.TextureView;
+import android.view.View;
 import android.widget.Button;
 
 import java.io.File;
@@ -22,8 +24,8 @@ import java.io.IOException;
 import java.util.List;
 
 public class CameraAPI extends Activity implements TextureView.SurfaceTextureListener {
-    MainActivity main;
     /* https://newcircle.com/s/post/39/using__the_camera_api */
+    MainActivity main;
     private static final int MEDIA_TYPE_IMAGE = 1;
     private static final int MEDIA_TYPE_VIDEO = 2;
     Camera camera1;
@@ -41,11 +43,41 @@ public class CameraAPI extends Activity implements TextureView.SurfaceTextureLis
     String filenamePhoto;
     String filenameVideo;
 
-    void setListener(MainActivity argActivity) {
-        main = argActivity;
-        mTextureView.setSurfaceTextureListener(this);
-        //main.frame = (LinearLayout) main.findViewById(R.id.previewFrame);
-        //main.frame.addView(mTextureView);
+    public CameraAPI(MainActivity arg)
+    {main = arg;}
+
+    //TODO: retest on Kitkat device or older
+    public void cameraInit() {
+        mTextureView = (TextureView) this.findViewById(R.id.preview);
+
+        main.torchButton.setOnClickListener(new View.OnClickListener() {
+            public void onClick(View v) {
+                if (torch) {
+                    turnOffTorch();
+                    main.torchButton.setTextColor(Color.rgb(255, 255, 255));
+                } else {
+                    turnOnTorch();
+                    main.torchButton.setTextColor(Color.rgb(0, 0, 0));
+                }
+            }
+        });
+
+        main.photoButton.setOnClickListener(new View.OnClickListener() {
+            public void onClick(View v) {
+                captureImage(false);
+            }
+        });
+
+        main.videoButton.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                if (!isRecording) {
+                    captureVideoStart();
+                } else {
+                    captureVideoStop();
+                }
+            }
+        });
     }
 
     ShutterCallback shutterCallback = new ShutterCallback() {
@@ -53,11 +85,36 @@ public class CameraAPI extends Activity implements TextureView.SurfaceTextureLis
             Log.d("camera", "onShutter'd");
         }
     };
-
     // Handles data for raw picture
     PictureCallback rawCallback = new PictureCallback() {
         public void onPictureTaken(byte[] data, Camera camera) {
             Log.d("camera", "onPictureTaken - raw");
+        }
+    };
+    // Handles data for jpeg picture
+    PictureCallback jpegCallback = new PictureCallback() {
+        public void onPictureTaken(byte[] data, Camera camera) {
+            FileOutputStream outStream;
+            try {
+                /* http://stackoverflow.com/questions/30411679/android-studio-open-failed-erofs-read-only-file-system-when-creating-a-file/30411821#30411821 */
+
+                filenamePhoto = getTimeStamp() + ".jpg";
+                outStream = new FileOutputStream(new File(media, filenamePhoto));
+
+                outStream.write(data);
+                outStream.close();
+
+                File outFile = new File(media + filenamePhoto);
+                setGeoTag(outFile, main.locObject.recentLocation);
+
+                main.logObject.saveComment("Picture taken: " + filenamePhoto);
+            } catch (FileNotFoundException e) {
+                e.printStackTrace();
+            } catch (IOException e) {
+                e.printStackTrace();
+            } finally {
+            }
+            refreshCamera();
         }
     };
 
@@ -108,32 +165,12 @@ public class CameraAPI extends Activity implements TextureView.SurfaceTextureLis
         return true;
     }
 
-    // Handles data for jpeg picture
-    PictureCallback jpegCallback = new PictureCallback() {
-        public void onPictureTaken(byte[] data, Camera camera) {
-            FileOutputStream outStream;
-            try {
-                /* http://stackoverflow.com/questions/30411679/android-studio-open-failed-erofs-read-only-file-system-when-creating-a-file/30411821#30411821 */
-
-                filenamePhoto = getTimeStamp() + ".jpg";
-                outStream = new FileOutputStream(new File(media, filenamePhoto));
-
-                outStream.write(data);
-                outStream.close();
-
-                File outFile = new File(media + filenamePhoto);
-                setGeoTag(outFile, main.locObject.recentLocation);
-
-                main.logObject.saveComment("Picture taken: " + filenamePhoto);
-            } catch (FileNotFoundException e) {
-                e.printStackTrace();
-            } catch (IOException e) {
-                e.printStackTrace();
-            } finally {
-            }
-            refreshCamera();
-        }
-    };
+    void setListener(MainActivity argActivity) {
+        main = argActivity;
+        mTextureView.setSurfaceTextureListener(this);
+        //main.frame = (LinearLayout) main.findViewById(R.id.previewFrame);
+        //main.frame.addView(mTextureView);
+    }
 
     String getTimeStamp() {
         Long time = System.currentTimeMillis();
@@ -246,23 +283,6 @@ public class CameraAPI extends Activity implements TextureView.SurfaceTextureLis
         //main.serverTCP.sendFeedback(4, 0);
     }
 
-    // "wait and notify" method
-    // http://www.programcreek.com/2009/02/notify-and-wait-example/
-    class ThreadB extends Thread {
-        @Override
-        public void run() {
-            synchronized (this) {
-                try {
-                    camera1.takePicture(null, null, jpegCallback);
-                } catch (Exception e) {
-                    Log.d("camera", "Couldn't: " + e);
-                    main.logObject.saveComment("Error" + e.toString());
-                }
-                notify();
-            }
-        }
-    }
-
     public void captureImage(boolean isRemotely) {
         if (isRecording) {
             if (isRemotely) {
@@ -295,7 +315,7 @@ public class CameraAPI extends Activity implements TextureView.SurfaceTextureLis
                 main.videoButton.setVisibility(Button.VISIBLE);
             }
         } else {
-        /* camera is not recording */
+            /* camera is not recording */
             try {
                 camera1.takePicture(null /*shutterCallback*/, null /*rawCallback*/, jpegCallback);
                 /* camera is not recording, shutter pressed remotely, picture taken feedback */
@@ -306,7 +326,7 @@ public class CameraAPI extends Activity implements TextureView.SurfaceTextureLis
         }
 
 //TODO
-/* sending e-mail */
+        /* sending e-mail */
 /*
         Mail m = new Mail("mareksuma1985@gmail.com", "password");
         String[] toArr = {"msuma@wp.pl"};
@@ -431,5 +451,22 @@ public class CameraAPI extends Activity implements TextureView.SurfaceTextureLis
 
     public void onSurfaceTextureUpdated(SurfaceTexture surface) {
         /* Invoked every time there's a new Camera preview frame */
+    }
+
+    // "wait and notify" method
+    // http://www.programcreek.com/2009/02/notify-and-wait-example/
+    class ThreadB extends Thread {
+        @Override
+        public void run() {
+            synchronized (this) {
+                try {
+                    camera1.takePicture(null, null, jpegCallback);
+                } catch (Exception e) {
+                    Log.d("camera", "Couldn't: " + e);
+                    main.logObject.saveComment("Error" + e.toString());
+                }
+                notify();
+            }
+        }
     }
 }

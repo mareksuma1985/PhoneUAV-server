@@ -1,41 +1,55 @@
 package pl.bezzalogowe.PhoneUAV;
 
+import android.Manifest;
 import android.content.Context;
+import android.content.pm.PackageManager;
 import android.location.LocationListener;
 import android.location.LocationManager;
 import android.os.Bundle;
+import android.support.v4.content.ContextCompat;
 import android.telephony.TelephonyManager;
 import android.text.format.Time;
 import android.util.Base64;
 import android.util.Log;
+
+import java.nio.ByteBuffer;
+
 import org.w3c.dom.DOMException;
 import org.w3c.dom.Document;
 import org.w3c.dom.Element;
 import org.w3c.dom.NodeList;
 import org.xml.sax.SAXException;
-import java.nio.ByteBuffer;
+
 import java.io.IOException;
 import java.net.MalformedURLException;
 import java.net.URL;
 import java.net.URLConnection;
 import java.util.Arrays;
 import java.util.LinkedList;
+
 import javax.xml.parsers.DocumentBuilder;
 import javax.xml.parsers.DocumentBuilderFactory;
 import javax.xml.parsers.ParserConfigurationException;
 
 public class Location extends Thread {
+    MainActivity main;
     private static final String TAG = "location";
     LocationManager locationManager;
     android.location.Location recentLocation;
     android.location.Location waypointNext;
     LinkedList<Waypoint> route = new LinkedList<Waypoint>();
     String deviceIdentifier = null;
-    MainActivity main;
 
     double[] altitudesample = new double[10];
+    /* estimated takeoff altitude calculated from 10 first locks */
+    double takeoff_altitude;
+    public  Location(MainActivity argActivity) {
+        main = argActivity;
+    }
 
-    /** converts one double to an array of 8 bytes */
+    /**
+     * converts one double to an array of 8 bytes
+     */
     public static final byte[] double2Bytes(double inData) {
         long bits = Double.doubleToLongBits(inData);
         byte[] buffer = {(byte) (bits & 0xff),
@@ -49,7 +63,9 @@ public class Location extends Thread {
         return buffer;
     }
 
-    /** converts an array of doubles to an array of bytes */
+    /**
+     * converts an array of doubles to an array of bytes
+     */
     public static final byte[] doubleArray2Bytes(double[] inArray) {
         int j = 0;
         int length = inArray.length;
@@ -68,7 +84,9 @@ public class Location extends Thread {
         return out;
     }
 
-    /** converts an array of bytes to a double */
+    /**
+     * converts an array of bytes to a double
+     */
     public static final double bytesArray2Double(byte[] input) {
         System.out.println(Arrays.toString(input) + "\n");
         byte[] reverse = new byte[]{input[7], input[6], input[5], input[4], input[3], input[2], input[1], input[0]};
@@ -111,13 +129,24 @@ public class Location extends Thread {
             for (int i = 0; i <= pos; i++) {
                 sum += altitudesample[pos];
             }
-            double average = sum / main.logObject.trackpointNumber;
+            takeoff_altitude = sum / main.logObject.trackpointNumber;
 
-            main.pressureObject.pressure_mean_sealevel = Barometer.getSealevelPressure((float) /*location.getAltitude()*/ average, main.pressureObject.pressureBarometricRecent);
-            Log.d("location", "average GPS altitude: " + average +
+            main.pressureObject.pressure_mean_sealevel = Barometer.getSealevelPressure((float) /*location.getAltitude()*/ takeoff_altitude, main.pressureObject.pressureBarometricRecent);
+            Log.d("location", "average GPS altitude: " + takeoff_altitude +
                     "; number of samples: " + main.logObject.trackpointNumber +
                     "; barometric pressure: " + main.pressureObject.pressureBarometricRecent +
                     "; sea level pressure: " + main.pressureObject.pressure_mean_sealevel);
+        }
+
+        if (main.pressureObject.barometer == null)
+        {
+            /* if barometer is not available */
+            main.mavLink.sendGlobalPosition(recentLocation.getLatitude(), recentLocation.getLongitude(), recentLocation.getAltitude(), recentLocation.getAltitude() - takeoff_altitude);
+        }
+        else
+        {
+            /* if there is a barometer available */
+            main.mavLink.sendGlobalPosition(recentLocation.getLatitude(), recentLocation.getLongitude(), main.pressureObject.altitudeBarometricRecent, main.pressureObject.altitudeBarometricRecent - takeoff_altitude);
         }
 
 /** saves location online */
@@ -148,11 +177,24 @@ public class Location extends Thread {
                     recentLocation.getLongitude(),
                     recentLocation.getAltitude(),
                     main.magObject.heading,
+                    recentLocation.getSpeed(),
                     recentLocation.getAccuracy(), recentLocation.getTime());
         } catch (IOException e) {
             Log.d(TAG, e.toString());
             e.printStackTrace();
         }
+
+/** saves data to a SRT file */
+            try {
+                main.logSubRip.saveTrackpoint(
+                        recentLocation.getTime(),
+                        main.magObject.heading,
+                        recentLocation.getSpeed()
+                        );
+            } catch (IOException e) {
+                Log.d(TAG, e.toString());
+                e.printStackTrace();
+            }
 
 /** sends location over UDP (must be done in a separate thread) */
         Thread feedbackLocation = new Thread(new Wrap());
@@ -169,8 +211,7 @@ public class Location extends Thread {
         }
     }
 
-    public void startLocation(final MainActivity argActivity) {
-        main = argActivity;
+    public void startLocation() {
         locationManager = (LocationManager) main.getSystemService(Context.LOCATION_SERVICE);
         TelephonyManager telemamanger = (TelephonyManager) main.getSystemService(main.TELEPHONY_SERVICE);
 
@@ -210,11 +251,8 @@ public class Location extends Thread {
             }
         };
 
-        try {
+        if (ContextCompat.checkSelfPermission(main, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED) {
             locationManager.requestLocationUpdates(LocationManager.GPS_PROVIDER, 1000, 1, locationListener);
-        } catch (Exception e) {
-            e.printStackTrace();
-            Log.d("location", e.toString());
         }
     }
 

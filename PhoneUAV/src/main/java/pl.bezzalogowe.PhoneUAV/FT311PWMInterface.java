@@ -95,8 +95,9 @@ public class FT311PWMInterface extends Activity {
 
 		/* create the packet */
         writeusbdata[0] = 0x22;
-        writeusbdata[1] = pwmChannel;
-        writeusbdata[2] = dutyCycle;
+        writeusbdata[1] = (byte) (Math.abs(pwmChannel) - 1);
+        writeusbdata[2] = (byte) ((pwmChannel >= 0) ? dutyCycle : (100-dutyCycle));
+
         writeusbdata[3] = 0x00;
 
 		/* send the packet over the USB */
@@ -178,10 +179,10 @@ public class FT311PWMInterface extends Activity {
     /* destroy accessory */
     public void DestroyAccessory() {
         Reset();
-        SetDutyCycle((byte) 0, (byte) 0);
         SetDutyCycle((byte) 1, (byte) 0);
         SetDutyCycle((byte) 2, (byte) 0);
         SetDutyCycle((byte) 3, (byte) 0);
+        SetDutyCycle((byte) 4, (byte) 0);
         CloseAccessory();
     }
 

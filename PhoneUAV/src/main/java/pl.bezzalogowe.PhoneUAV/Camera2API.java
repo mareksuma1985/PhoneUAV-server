@@ -3,6 +3,7 @@ package pl.bezzalogowe.PhoneUAV;
 import android.Manifest;
 import android.content.Intent;
 import android.content.pm.PackageManager;
+import android.graphics.Color;
 import android.graphics.ImageFormat;
 import android.graphics.SurfaceTexture;
 import android.hardware.camera2.CameraAccessException;
@@ -23,13 +24,15 @@ import android.os.Build;
 import android.os.Environment;
 import android.os.Handler;
 import android.os.HandlerThread;
-import android.support.annotation.NonNull;
+import android.os.Message;
 import android.support.v4.content.ContextCompat;
 import android.util.Log;
 import android.util.Size;
 import android.view.Surface;
 import android.view.TextureView;
 import android.view.TextureView.SurfaceTextureListener;
+import android.view.View;
+import android.view.WindowManager;
 import android.widget.Toast;
 
 import java.io.File;
@@ -39,12 +42,18 @@ import java.nio.ByteBuffer;
 import java.util.Arrays;
 import java.util.List;
 
+import static android.content.Context.CAMERA_SERVICE;
+
 public class Camera2API implements SurfaceTextureListener {
+    MainActivity main;
     private static final String TAG = "camera2";
     private static final int STATE_PREVIEW = 0;
     private static final int STATE_WAIT_LOCK = 1;
+
     public HandlerThread camera2thread;
     public Handler camera2handler;
+
+
     private final ImageReader.OnImageAvailableListener mOnImageAvailableListener = new
             ImageReader.OnImageAvailableListener() {
                 @Override
@@ -58,15 +67,18 @@ public class Camera2API implements SurfaceTextureListener {
      * http://developer.android.com/reference/android/hardware/camera2/package-summary.html
      * https://www.youtube.com/channel/UC4jh7YBBb0UnPIef2NOSJhQ
      */
-
-    MainActivity main;
     CameraManager cameraManager;
     String[] camerasList;
     boolean cameraHasAutoFocus = false;
     boolean torch = false;
+    boolean cameraInitialised = false;
     TextureView mTextureView;
     Thread previewThread;
     Size maxResJPEG, maxResMP4;
+    String emailHost;
+    int emailPort;
+    String fromEmail;
+    String fromPassword;
     String toEmails = null;
     List<String> toEmailList = null;
     CameraDevice mCameraDevice;
@@ -75,6 +87,11 @@ public class Camera2API implements SurfaceTextureListener {
     private int mCaptureState = STATE_PREVIEW;
     private ImageReader mImageReader;
     private MediaRecorder mMediaRecorder;
+    Handler handlerRecord, handlerTorch;
+
+    public Camera2API(MainActivity arg)
+    {main = arg;}
+
     CameraDevice.StateCallback mCameraDeviceStateCallback = new CameraDevice.StateCallback() {
         @Override
         public void onOpened(CameraDevice camera) {
@@ -92,7 +109,6 @@ public class Camera2API implements SurfaceTextureListener {
         @Override
         public void onDisconnected(CameraDevice camera) {
             stopPreview();
-
             camera.close();
             mCameraDevice = null;
         }
@@ -101,7 +117,6 @@ public class Camera2API implements SurfaceTextureListener {
 
         @Override
         public void onSurfaceTextureUpdated(SurfaceTexture surface) {
-            // TODO Auto-generated method stub
         }
 
         @Override
@@ -118,67 +133,22 @@ public class Camera2API implements SurfaceTextureListener {
 
         @Override
         public void onSurfaceTextureAvailable(SurfaceTexture surface, int width, int height) {
-            setupCamera();
-            connectCamera();
+            if (mCameraDevice == null) {
+                setupCamera();
+                connectCamera();
+            }
+            else
+            {
+                if (!isRecording)
+                {previewThread.start();}
+                else
+                {
+                    //FIXME: Preview doesn't restart after screen is re-activated, start preview without stopping recording
+                    //resumePreview();
+                }
+            }
         }
     };
-    private CameraCaptureSession mRecordCaptureSession;
-    private CaptureRequest.Builder mCaptureRequestBuilder;
-    private File imageFolder, videoFolder;
-    private CameraCaptureSession.CaptureCallback mPreviewCaptureCallback = new
-            CameraCaptureSession.CaptureCallback() {
-                private void process(CaptureResult captureResult) {
-                    switch (mCaptureState) {
-                        case STATE_PREVIEW:
-                            break;
-                        case STATE_WAIT_LOCK:
-                            mCaptureState = STATE_PREVIEW;
-                            Integer afState = captureResult.get(CaptureResult.CONTROL_AF_STATE);
-
-                            if (cameraHasAutoFocus) {
-                                if (afState == CaptureResult.CONTROL_AF_STATE_FOCUSED_LOCKED ||
-                                        afState == CaptureResult.CONTROL_AF_STATE_NOT_FOCUSED_LOCKED) {
-                                    startStillCaptureRequest();
-                                }
-                            } else {
-                                startStillCaptureRequest();
-                            }
-                            break;
-                    }
-                }
-
-                @Override
-                public void onCaptureCompleted(CameraCaptureSession session, CaptureRequest request, TotalCaptureResult result) {
-                    super.onCaptureCompleted(session, request, result);
-                    process(result);
-                }
-            };
-    private CameraCaptureSession.CaptureCallback mRecordCaptureCallback = new
-            CameraCaptureSession.CaptureCallback() {
-                private void process(CaptureResult captureResult) {
-                    switch (mCaptureState) {
-                        case STATE_PREVIEW:
-                            // Do nothing
-                            break;
-                        case STATE_WAIT_LOCK:
-                            mCaptureState = STATE_PREVIEW;
-                            Integer afState = captureResult.get(CaptureResult.CONTROL_AF_STATE);
-                            if (afState == CaptureResult.CONTROL_AF_STATE_FOCUSED_LOCKED ||
-                                    afState == CaptureResult.CONTROL_AF_STATE_NOT_FOCUSED_LOCKED) {
-                                Log.d(TAG, "camera " + main.cameraID + " AF Locked!");
-                                startStillCaptureRequest();
-                            }
-                            break;
-                    }
-                }
-
-                @Override
-                public void onCaptureCompleted(CameraCaptureSession session, CaptureRequest request, TotalCaptureResult result) {
-                    super.onCaptureCompleted(session, request, result);
-
-                    process(result);
-                }
-            };
 
     private static Size pickSizeJPEG(StreamConfigurationMap map) {
         /** https://developer.android.com/reference/android/graphics/ImageFormat#JPEG */
@@ -248,12 +218,38 @@ public class Camera2API implements SurfaceTextureListener {
 
     private void printSizes(StreamConfigurationMap map) {
         /**
-         * https://developer.android.com/reference/android/graphics/ImageFormat.html
+         https://developer.android.com/reference/android/graphics/ImageFormat.html
+         34 - PRIVATE, 35 - YUV_420_888, 256 - JPEG, 842094169 - YV12
          */
 
         int[] formats = map.getOutputFormats();
         for (int item : formats) {
-            Log.d(TAG, "format: " + item);
+
+
+            switch (item) {
+                case 34: {
+                    Log.d(TAG, "format: PRIVATE");
+                }
+                break;
+
+                case 35: {
+                    Log.d(TAG, "format: YUV_420_888");
+                }
+                break;
+
+                case 842094169: {
+                    Log.d(TAG, "format: YV12");
+                }
+                break;
+
+                case 256:
+                    Log.d(TAG, "format: JPEG");
+                    break;
+                default:
+                    Log.d(TAG, "format: " + item);
+                    break;
+            }
+
             String str = "";
             Size[] sizes = map.getOutputSizes(item);
             for (int i = 0; i < sizes.length; i++) {
@@ -267,6 +263,7 @@ public class Camera2API implements SurfaceTextureListener {
     }
 
     public void setupCamera() {
+
         try {
             camerasList = cameraManager.getCameraIdList();
         } catch (CameraAccessException e) {
@@ -280,6 +277,8 @@ public class Camera2API implements SurfaceTextureListener {
         } catch (CameraAccessException e) {
             e.printStackTrace();
         }
+
+        String backCameraId = "";
 
         try {
             for (String id : cameraManager.getCameraIdList()) {
@@ -297,6 +296,7 @@ public class Camera2API implements SurfaceTextureListener {
                     Log.d(TAG, "camera " + id + " back facing: " +
                             sensorBack.getWidth() + "×" +
                             sensorBack.getHeight());
+                    backCameraId = id;
                 }
 
                 if (cameraChar.get(CameraCharacteristics.LENS_FACING) == CameraCharacteristics.LENS_FACING_EXTERNAL) {
@@ -306,6 +306,9 @@ public class Camera2API implements SurfaceTextureListener {
                             cameraChar.get(CameraCharacteristics.SENSOR_INFO_PIXEL_ARRAY_SIZE).getHeight());
                 }
             }
+
+            CameraCharacteristics cameraCharacteristics = cameraManager.getCameraCharacteristics(backCameraId);
+            Log.d(TAG, "back camera sensor orientation: " + cameraCharacteristics.get(CameraCharacteristics.SENSOR_ORIENTATION));
 
             StreamConfigurationMap map = getStreamConfigurationMap();
             // Prints all available picture sizes for all formats.
@@ -320,6 +323,7 @@ public class Camera2API implements SurfaceTextureListener {
 
             mImageReader = ImageReader.newInstance(maxResJPEG.getWidth(), maxResJPEG.getHeight(), ImageFormat.JPEG, 1);
             mImageReader.setOnImageAvailableListener(mOnImageAvailableListener, camera2handler);
+
 
             /** https://developer.android.com/reference/android/hardware/camera2/CaptureRequest.html#CONTROL_AF_MODE */
             // Checks if camera has autofocus feature.
@@ -377,20 +381,15 @@ public class Camera2API implements SurfaceTextureListener {
                     e.printStackTrace();
                 }
             } else {
-                if (ContextCompat.checkSelfPermission(main, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED) {
-                    cameraManager.openCamera(main.cameraID, mCameraDeviceStateCallback, camera2handler);
-                }
-                /*
                 if(ContextCompat.checkSelfPermission(main, android.Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED) {
                     cameraManager.openCamera(main.cameraID, mCameraDeviceStateCallback, camera2handler);
                 } else {
-                    if(shouldShowRequestPermissionRationale(android.Manifest.permission.CAMERA)) {
-                        Toast.makeText(this, "Video app required access to camera", Toast.LENGTH_SHORT).show();
-                    }
-                    requestPermissions(new String[] {android.Manifest.permission.CAMERA, Manifest.permission.RECORD_AUDIO
-                    }, REQUEST_CAMERA_PERMISSION_RESULT);
+                    /*if(shouldShowRequestPermissionRationale(android.Manifest.permission.CAMERA))*/
+                        Toast.makeText(main, "Video app required access to camera", Toast.LENGTH_SHORT).show();
+                    main.requestPermissions(new String[] {android.Manifest.permission.CAMERA, Manifest.permission.RECORD_AUDIO
+                    }, main.REQUEST_CAMERA_PERMISSION_RESULT);
                 }
-                */
+
             }
         } catch (CameraAccessException e) {
             e.printStackTrace();
@@ -456,32 +455,190 @@ public class Camera2API implements SurfaceTextureListener {
     }
 
     public void sendPhotoByEmail() {
-        try {
-            String fromEmail = "user@server.pl";
-            String fromPassword = "";
-            String emailSubject = "temat";
-            String emailBody = "attached photo: " + imageFileName;
-            new SendMailTask().execute(fromEmail, fromPassword, toEmailList, emailSubject, emailBody, main);
-        } catch (Exception e) {
-            System.out.println(e.getMessage());
+
+        /** photo is sent only if you set password for sending mailbox */
+        if (fromPassword != null && fromPassword != "") {
+            try {
+                String emailSubject = "Subject";
+                String emailBody = "attached photo: " + imageFileName;
+                new SendMailTask().execute(emailHost, emailPort, fromEmail, fromPassword, toEmailList, emailSubject, emailBody, main);
+            } catch (Exception e) {
+                System.out.println(e.getMessage());
+            }
         }
     }
 
-    public void startRecord() {
+    public void cameraInit() {
+        handlerRecord = new Handler(new Handler.Callback() {
+            @Override
+            public boolean handleMessage(Message msg) {
+                if (msg.arg1 == 1) {
+                    //startRecord();
+                } else {
+                    //stopRecord();
+                }
+                return false;
+            }
+        });
+
+        handlerTorch = new Handler(new Handler.Callback() {
+            @Override
+            public boolean handleMessage(Message msg) {
+                if (msg.arg1 == 1) {
+                    turnOnTorch();
+                    main.torchButton.setTextColor(Color.rgb(255, 255, 255));
+                    torch = true;
+                } else {
+                    turnOffTorch();
+                    main.torchButton.setTextColor(Color.rgb(0, 0, 0));
+                    torch = false;
+                }
+                return false;
+            }
+        });
+
+        emailHost = main.settings.getString("email-smtp-host", "smtp.wp.pl"); //smtp.gmail.com; mail.active24.pl; smtp.wp.pl
+        emailPort = Integer.valueOf(main.settings.getString("email-smtp-port", "465")); //gmail.com: 587; wp.pl: 465
+        fromEmail = main.settings.getString("email-from", "foto.pulapka@wp.pl"); //login@gmail.com; foto.pulapka@wp.pl
+        fromPassword = main.settings.getString("email-password", "");
+
+        /** e-mail recipients separated with commas or semicolons */
+
         try {
+            toEmails = main.settings.getString("email-list", "msuma@wp.pl");
+            if (toEmails != "") {
+                toEmailList = Arrays.asList(toEmails.split("\\s*[,;]\\s*"));
+            }
+        } catch (NumberFormatException e) {
+            e.printStackTrace();
+        }
+
+        createVideoFolder();
+        createImageFolder();
+
+        mTextureView = (TextureView) main.findViewById(R.id.preview);
+
+        main.torchButton.setOnClickListener(new View.OnClickListener() {
+            public void onClick(View v) {
+                if (torch) {
+                    turnOffTorch();
+                    main.torchButton.setTextColor(Color.rgb(255, 255, 255));
+                } else {
+                    turnOnTorch();
+                    main.torchButton.setTextColor(Color.rgb(0, 0, 0));
+                }
+            }
+        });
+
+        main.photoButton.setOnClickListener(new View.OnClickListener() {
+            public void onClick(View v) {
+                captureImage();
+            }
+        });
+
+        main.videoButton.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                if (!isRecording) {
+                    startRecord();
+                } else {
+                    stopRecord();
+                }
+            }
+        });
+    }
+
+    boolean hasCameraPermission()
+    {return ContextCompat.checkSelfPermission(main, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED;}
+
+    void cameraPause()
+    {
+        if (cameraInitialised){
+            if (Build.VERSION.SDK_INT >= 21 ) {
+                /* API>20 */
+                if (mPreviewCaptureSession == null) {
+                    // Preview not initialized, improbable situation
+                    closeActiveCamera();
+                    stopCameraThread();
+                } else {
+                    // Preview initialized, hides preview
+                    mTextureView.setVisibility(View.INVISIBLE);
+                }
+            } else {
+                /* Build.VERSION_CODES.KITKAT_WATCH */
+            }
+        }
+    }
+
+    void cameraResume()
+    {
+        if (cameraInitialised) {
+            if (Build.VERSION.SDK_INT >= 21 ) {
+                if (mPreviewCaptureSession == null) {
+                    // Preview not initialized
+                    setListener(main);
+                    startCameraThread();
+                    if (mTextureView.isAvailable()) {
+                        Log.d("camera", "surface IS available");
+                        setupCamera();
+                    } else {
+                        Log.d("camera", "surface IS NOT yet available");
+                        try {
+                            cameraManager = (android.hardware.camera2.CameraManager) main.getSystemService(CAMERA_SERVICE);
+                        } catch (Exception e) {
+                            Log.d("camera", "manager: " + e.toString());
+                        }
+                    }
+                } else {
+                    // Preview initialized, un-hides preview
+                    mTextureView.setVisibility(View.VISIBLE);
+                }
+            } else {
+                /* Build.VERSION_CODES.KITKAT_WATCH */
+                //camObjectKitkat.setListener(this);
+            }
+        }
+    }
+
+    public void startPreview() {
+        previewThread = new Thread(new PreviewThread());
+        previewThread.start();
+    }
+
+    public void stopPreview() {
+        if (/*previewThread != null*/ previewThread.getState() == Thread.State.RUNNABLE) {
+            try {
+                mPreviewCaptureSession.stopRepeating();
+            } catch (CameraAccessException e) {
+                e.printStackTrace();
+            }
+            previewThread.interrupt();
+            previewThread = null;
+        }
+    }
+
+
+    private CameraCaptureSession mRecordCaptureSession;
+    public void startRecord() {
+
+        try {
+            /** Android 7 issue: screen must stay on, otherwise preview won't restart when it is reactivated
+             * this forces the screen to stay on */
+            main.getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+
             createVideoFileName();
             setupMediaRecorder();
 
-            SurfaceTexture surfaceTexture = mTextureView.getSurfaceTexture();
+            surfaceTexture = mTextureView.getSurfaceTexture();
             surfaceTexture.setDefaultBufferSize(176, 144);
-            Surface previewSurface = new Surface(surfaceTexture);
+            preview = new Surface(surfaceTexture);
             Surface recordSurface = mMediaRecorder.getSurface();
             mCaptureRequestBuilder = mCameraDevice.createCaptureRequest(CameraDevice.TEMPLATE_RECORD);
 
-            mCaptureRequestBuilder.addTarget(previewSurface);
+            mCaptureRequestBuilder.addTarget(preview);
             mCaptureRequestBuilder.addTarget(recordSurface);
 
-            mCameraDevice.createCaptureSession(Arrays.asList(previewSurface, recordSurface, mImageReader.getSurface()),
+            mCameraDevice.createCaptureSession(Arrays.asList(preview, recordSurface, mImageReader.getSurface()),
                     new CameraCaptureSession.StateCallback() {
                         @Override
                         public void onConfigured(CameraCaptureSession session) {
@@ -510,18 +667,24 @@ public class Camera2API implements SurfaceTextureListener {
             Log.d(TAG, "start error: " + e);
         }
 
+
         isRecording = true;
         main.videoButton.setText("\u25A0");
+        main.videoButton.setTextColor(0xffffffff);
 
         Thread feedbackCameraThread = new Thread(new Wrap());
         feedbackCameraThread.start();
 
         Thread torch = new Thread(new setTorchDelayed());
         torch.start();
+
+        //TODO: add condition
+        main.logSubRip.startLog();
     }
 
     public void stopRecord() {
-        // Starting the preview prior to stopping recording which should hopefully resolve issues being seen in Samsung devices.
+
+        /* Starting the preview prior to stopping recording which should hopefully resolve issues being seen in Samsung devices. */
         startPreview();
         try {
             mMediaRecorder.start();
@@ -531,31 +694,24 @@ public class Camera2API implements SurfaceTextureListener {
         }
 
         mMediaRecorder.reset();
+
         isRecording = false;
         main.videoButton.setText("\u25CF");
+        main.videoButton.setTextColor(0xffcc0000);
 
         Thread feedbackFeedbackCamera = new Thread(new Wrap());
         feedbackFeedbackCamera.start();
         truncateVideoPath();
+
         Thread torch = new Thread(new setTorchDelayed());
         torch.start();
-    }
 
-    public void startPreview() {
-        previewThread = new Thread(new PreviewThread());
-        previewThread.start();
-    }
+        /** Android 7 issue: screen must stay on, otherwise preview won't restart when it is reactivated,
+         * this allows the screen to go dark once recording has stopped */
+        main.getWindow().clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
 
-    public void stopPreview() {
-        if (previewThread != null) {
-            try {
-                mPreviewCaptureSession.stopRepeating();
-            } catch (CameraAccessException e) {
-                e.printStackTrace();
-            }
-            previewThread.interrupt();
-            previewThread = null;
-        }
+        //TODO: add condition
+        main.logSubRip.stopLog(main);
     }
 
     private void startStillCaptureRequest() {
@@ -627,6 +783,7 @@ public class Camera2API implements SurfaceTextureListener {
             e.printStackTrace();
         }
     }
+
 
     public void closeActiveCamera() {
         if (mCameraDevice != null) {
@@ -713,6 +870,69 @@ public class Camera2API implements SurfaceTextureListener {
         imageFileName = to.getName();
     }
 
+
+    private CaptureRequest.Builder mCaptureRequestBuilder;
+    public File imageFolder, videoFolder;
+
+
+    private CameraCaptureSession.CaptureCallback mPreviewCaptureCallback = new
+            CameraCaptureSession.CaptureCallback() {
+                private void process(CaptureResult captureResult) {
+                    switch (mCaptureState) {
+                        case STATE_PREVIEW:
+                            break;
+                        case STATE_WAIT_LOCK:
+                            mCaptureState = STATE_PREVIEW;
+                            Integer afState = captureResult.get(CaptureResult.CONTROL_AF_STATE);
+
+                            if (cameraHasAutoFocus) {
+                                if (afState == CaptureResult.CONTROL_AF_STATE_FOCUSED_LOCKED ||
+                                        afState == CaptureResult.CONTROL_AF_STATE_NOT_FOCUSED_LOCKED) {
+                                    startStillCaptureRequest();
+                                }
+                            } else {
+                                startStillCaptureRequest();
+                            }
+                            break;
+                    }
+                }
+
+                @Override
+                public void onCaptureCompleted(CameraCaptureSession session, CaptureRequest request, TotalCaptureResult result) {
+                    super.onCaptureCompleted(session, request, result);
+                    process(result);
+                }
+            };
+/*
+    private CameraCaptureSession.CaptureCallback mRecordCaptureCallback = new
+            CameraCaptureSession.CaptureCallback() {
+                private void process(CaptureResult captureResult) {
+                    switch (mCaptureState) {
+                        case STATE_PREVIEW:
+                            // Do nothing
+                            break;
+                        case STATE_WAIT_LOCK:
+                            mCaptureState = STATE_PREVIEW;
+                            Integer afState = captureResult.get(CaptureResult.CONTROL_AF_STATE);
+                            if (afState == CaptureResult.CONTROL_AF_STATE_FOCUSED_LOCKED ||
+                                    afState == CaptureResult.CONTROL_AF_STATE_NOT_FOCUSED_LOCKED) {
+                                Log.d(TAG, "camera " + main.cameraID + " AF Locked!");
+                                startStillCaptureRequest();
+                            }
+                            break;
+                    }
+                }
+
+                @Override
+                public void onCaptureCompleted(CameraCaptureSession session, CaptureRequest request, TotalCaptureResult result) {
+                    super.onCaptureCompleted(session, request, result);
+
+                    process(result);
+                }
+            };
+    */
+
+
     public void lockFocus() {
         mCaptureState = STATE_WAIT_LOCK;
         mCaptureRequestBuilder.set(CaptureRequest.CONTROL_AF_TRIGGER, CaptureRequest.CONTROL_AF_TRIGGER_START);
@@ -723,6 +943,7 @@ public class Camera2API implements SurfaceTextureListener {
             Log.d("lockFocus", "error: " + e);
         }
     }
+
 
     private class ImageSaver implements Runnable {
 
@@ -800,78 +1021,73 @@ public class Camera2API implements SurfaceTextureListener {
         }
     }
 
+    SurfaceTexture surfaceTexture;
+    Surface preview;
+    CameraCaptureSession.StateCallback previewCallback;
+
     class PreviewThread implements Runnable {
         @SuppressWarnings("all")
         public void run() {
-            SurfaceTexture surfaceTexture = mTextureView.getSurfaceTexture();
-            surfaceTexture.setDefaultBufferSize(176, 144);
-            final Surface preview = new Surface(surfaceTexture);
+            if (mCameraDevice != null)
+            {
+                surfaceTexture = mTextureView.getSurfaceTexture();
+                surfaceTexture.setDefaultBufferSize(176, 144);
+                preview = new Surface(surfaceTexture);
 
-            try {
-                mCaptureRequestBuilder = mCameraDevice.createCaptureRequest(CameraDevice.TEMPLATE_PREVIEW);
-            } catch (CameraAccessException e) {
-                e.printStackTrace();
-            }
+                try {
+                    mCaptureRequestBuilder = mCameraDevice.createCaptureRequest(CameraDevice.TEMPLATE_PREVIEW);
+                } catch (CameraAccessException e) {
+                    e.printStackTrace();
+                }
 
-            mCaptureRequestBuilder.addTarget(preview);
+                mCaptureRequestBuilder.addTarget(preview);
 
-            CameraCaptureSession.StateCallback callback = new CameraCaptureSession.StateCallback() {
+                previewCallback = new CameraCaptureSession.StateCallback() {
 
-                @Override
-                public void onConfigured(CameraCaptureSession session) {
-                    mPreviewCaptureSession = session;
-                    try {
-                        //FIXME: causes crashes when the app run for the first time after re-installation
-                        session.setRepeatingRequest(mCaptureRequestBuilder.build(), null, camera2handler);
-                    } catch (CameraAccessException e) {
-                        e.printStackTrace();
+                    @Override
+                    public void onConfigured(CameraCaptureSession session) {
+                        mPreviewCaptureSession = session;
+                        try {
+                            //FIXME: causes crashes when the app run for the first time after re-installation
+                            session.setRepeatingRequest(mCaptureRequestBuilder.build(), null, camera2handler);
+                        } catch (CameraAccessException e) {
+                            e.printStackTrace();
+                        }
                     }
-                }
 
-                @Override
-                public void onConfigureFailed(CameraCaptureSession session) {
-                    Log.d(TAG, "configuration failed");
-                }
-            };
+                    @Override
+                    public void onConfigureFailed(CameraCaptureSession session) {
+                        Log.d(TAG, "configuration failed");
+                    }
+                };
 
-            try {
-                mCameraDevice.createCaptureSession(Arrays.asList(preview, mImageReader.getSurface()), callback, camera2handler);
+                try {
+                    mCameraDevice.createCaptureSession(Arrays.asList(preview, mImageReader.getSurface()), previewCallback, camera2handler);
+                } catch (CameraAccessException e) {
+                    e.printStackTrace();
+                }
+            }
+        }
+    }
+
+    void resumePreview ()
+    {
+
+        //FIXME
+                try {
+                mPreviewCaptureSession.setRepeatingRequest(mCaptureRequestBuilder.build(), null, camera2handler);
             } catch (CameraAccessException e) {
                 e.printStackTrace();
             }
+
+        try {
+            mCameraDevice.createCaptureSession(Arrays.asList(preview, mImageReader.getSurface()), previewCallback, camera2handler);
+        } catch (CameraAccessException e) {
+            e.printStackTrace();
         }
+
     }
 
-    /*API >= 23 */
-/*
-    @Override
-    public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
-        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
-        if(requestCode == REQUEST_CAMERA_PERMISSION_RESULT) {
-            if(grantResults[0] != PackageManager.PERMISSION_GRANTED) {
-                Toast.makeText(getApplicationContext(),
-                        "Application will not run without camera services", Toast.LENGTH_SHORT).show();
-            }
-            if(grantResults[1] != PackageManager.PERMISSION_GRANTED) {
-                Toast.makeText(getApplicationContext(),
-                        "Application will not have audio on record", Toast.LENGTH_SHORT).show();
-            }
-        }
-        if(requestCode == REQUEST_WRITE_EXTERNAL_STORAGE_PERMISSION_RESULT) {
-            if(grantResults[0] == PackageManager.PERMISSION_GRANTED) {
-                if(mIsRecording || mIsTimelapse) {
-                    mIsRecording = true;
-                    mRecordImageButton.setImageResource(R.mipmap.btn_video_busy);
-                }
-                Toast.makeText(this,
-                        "Permission successfully granted!", Toast.LENGTH_SHORT).show();
-            } else {
-                Toast.makeText(this,
-                        "App needs to save video to run", Toast.LENGTH_SHORT).show();
-            }
-        }
-    }
-*/
     class Wrap implements Runnable {
         @Override
         public void run() {

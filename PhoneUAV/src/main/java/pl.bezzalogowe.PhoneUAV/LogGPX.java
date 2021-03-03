@@ -1,5 +1,6 @@
 package pl.bezzalogowe.PhoneUAV;
 
+import android.os.Build;
 import android.os.Environment;
 import android.util.Log;
 import java.io.BufferedWriter;
@@ -8,8 +9,12 @@ import java.io.FileNotFoundException;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.io.StringWriter;
+import java.sql.Timestamp;
+import java.time.LocalDateTime;
 
 public class LogGPX {
+
+    MainActivity main;
 
     String fileName;
     File file;
@@ -17,12 +22,16 @@ public class LogGPX {
     StringWriter writer;
     long trackpointNumber;
 
-    public void startLog(MainActivity pwmDemoActivity) {
+    public LogGPX(MainActivity argActivity) {
+        main = argActivity;
+    }
+
+    public void startLog() {
         fileName = (new java.text.SimpleDateFormat("yyyy-MM-dd").format(new java.util.Date())) + "_" + (new java.text.SimpleDateFormat("HH-mm-ss").format(new java.util.Date())) + ".gpx";
 
         trackpointNumber = 1;
         try {
-            file = new File(Environment.getExternalStorageDirectory().getAbsolutePath() + "/Download/" + fileName);
+            file = new File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DCIM) + "PhoneUAVmpeg4" + fileName);
 
             if (!(file.exists())) {
                 file.createNewFile();
@@ -37,7 +46,7 @@ public class LogGPX {
         }
     }
 
-    public void saveTrackpoint(double lat, double lon, double alt, double heading, float acc, long time) throws IOException {
+    public void saveTrackpoint(double lat, double lon, double alt, double heading, double speed, float acc, long time) throws IOException {
         /** A Track Point holds the coordinates, elevation, timestamp, and metadata for a single point in a track. */
         String dateISO8601 = new java.text.SimpleDateFormat("yyyy-MM-dd").format(new java.util.Date(time));
         String timeISO8601 = new java.text.SimpleDateFormat("HH:mm:ss").format(new java.util.Date(time));
@@ -46,8 +55,10 @@ public class LogGPX {
         String text = "<trkpt lat=\"" + Double.toString(lat) + "\" lon=\"" + Double.toString(lon) + "\">" +
         "<ele>" + Double.toString(alt) + "</ele>" +
         "<heading>" + Double.toString(heading) + "</heading>" +
+        "<speed>" + Double.toString(speed * 3.6) + "</speed>" +
         "<prec>" + Float.toString(acc) + "</prec>" +
         "<time>" + dateISO8601 + "T" + timeISO8601 + "</time></trkpt>\n";
+
         append(text);
     }
 

@@ -47,13 +47,51 @@
         android:singleLine="true"
         android:title="@string/set_path_title" />
 
+    <!-- TODO -->
+    <!--
     <EditTextPreference
         android:capitalize="words"
-        android:defaultValue="msuma@wp.pl"
+        android:inputType="text"
+        android:key="email-smtp-host"
+        android:maxLines="1"
+        android:selectAllOnFocus="true"
+        android:singleLine="true"
+        android:title="email-smtp-host" />
+
+    <EditTextPreference
+        android:capitalize="words"
+        android:inputType="number"
+        android:key="email-smtp-port"
+        android:maxLines="1"
+        android:selectAllOnFocus="true"
+        android:singleLine="true"
+        android:title="email-smtp-port" />
+
+    <EditTextPreference
+        android:capitalize="words"
+        android:inputType="text"
+        android:key="email-from"
+        android:maxLines="1"
+        android:selectAllOnFocus="true"
+        android:singleLine="true"
+        android:title="@string/set_email_from" />
+
+    <EditTextPreference
+        android:capitalize="words"
+        android:inputType="textPassword"
+        android:key="email-password"
+        android:maxLines="1"
+        android:selectAllOnFocus="true"
+        android:singleLine="true"
+        android:title="@string/set_email_password" />
+
+    <EditTextPreference
+        android:capitalize="words"
         android:inputType="text"
         android:key="email-list"
         android:maxLines="1"
         android:selectAllOnFocus="true"
         android:singleLine="true"
-        android:title="@string/set_email_title" />
+        android:title="@string/set_email_recipients" />
+-->
 </PreferenceScreen>

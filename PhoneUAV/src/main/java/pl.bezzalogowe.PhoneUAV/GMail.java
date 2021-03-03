@@ -41,13 +41,13 @@ public class GMail {
      * https://poczta.a24.domeny.pl/
      */
 
-    final String emailPort = "587"; // Gmail: 587
     final String smtpAuth = "true";
     final String starttls = "true";
-    final String emailHost = "mail.active24.pl"; // Gmail: smtp.gmail.com
 
     String fromEmail;
     String fromPassword;
+    String emailHost;
+    int emailPort = 465;
     List<String> toEmailList;
     String emailSubject;
     String emailBody;
@@ -60,7 +60,9 @@ public class GMail {
     public GMail() {
     }
 
-    public GMail(String fromEmail, String fromPassword, List<String> toEmailList, String emailSubject, String emailBody, MainActivity argActivity) {
+    public GMail(String emailHost, int emailPort, String fromEmail, String fromPassword, List<String> toEmailList, String emailSubject, String emailBody, MainActivity argActivity) {
+        this.emailHost = emailHost;
+        this.emailPort = emailPort;
         this.fromEmail = fromEmail;
         this.fromPassword = fromPassword;
         this.toEmailList = toEmailList;

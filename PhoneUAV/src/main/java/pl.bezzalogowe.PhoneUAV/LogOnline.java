@@ -8,12 +8,10 @@ import java.net.MalformedURLException;
 import java.net.URL;
 
 public class LogOnline extends AsyncTask<String, Void, LogOnline> {
-
     protected LogOnline doInBackground(String... input) {
         try {
-            /** serverpath, "write.php?data=", Latitude, Longitude, Altitude, Heading, Accuracy, Device identifier, Time */
-            //TODO: Add encoding parameters to Base64.
-            String address = input[0] + "write.php?data=" + input[1] + "," + input[2] + "," + input[3] + "," + input[4] + "," + input[5] + "," + input[6] + "," + input[7];
+            /** serverpath, "write.php?data=", Latitude, Longitude, Altitude, Heading, Accuracy, Device identifier, Base64, Send time */
+            String address = input[0] + "write.php?data=" + input[1] + "," + input[2] + "," + input[3] + "," + input[4] + "," + input[5] + "," + input[6] + "," + input[7] + "," + input[8];
             URL url = new URL(address);
             Log.d("LogOnline-url", url.toString());
             HttpURLConnection urlConnection = (HttpURLConnection) url.openConnection();

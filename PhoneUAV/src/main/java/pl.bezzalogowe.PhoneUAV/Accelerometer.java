@@ -14,6 +14,10 @@ public class Accelerometer {
     float[] accVectorDevice = new float[3];
     float[] accVectorVehicle = new float[3];
 
+    public  Accelerometer(MainActivity argActivity) {
+        main = argActivity;
+    }
+
     public void processAccelerometer(SensorEvent event) {
         /** Processes data from accelerometer event. */
 
@@ -48,12 +52,11 @@ public class Accelerometer {
         /* Sending accelerometer feedback disabled in favour of gravity sensor */
     }
 
-    public void startAccelerometer(MainActivity activityArgument) {
-        main = activityArgument;
-        accelerometerManager = (SensorManager) activityArgument.getSystemService(Context.SENSOR_SERVICE);
+    public void startAccelerometer() {
+        accelerometerManager = (SensorManager) main.getSystemService(Context.SENSOR_SERVICE);
         if (accelerometerManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER) != null) {
             sensorInstanceAcc = accelerometerManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER);
-            accelerometerManager.registerListener(activityArgument, sensorInstanceAcc, SensorManager.SENSOR_DELAY_FASTEST);
+            accelerometerManager.registerListener(main, sensorInstanceAcc, SensorManager.SENSOR_DELAY_FASTEST);
         } else {
             Log.d("onCreate", "Accelerometer error!");
         }

@@ -11,7 +11,6 @@ public class Barometer {
     public float pressure_mean_sealevel;
     // needed only for calibration at startup
     public float pressureBarometricRecent;
-
 /**
      https://www.daftlogic.com/sandbox-google-maps-find-altitude.htm
      https://www.youtube.com/watch?v=SyGxDEjXYIU
@@ -23,17 +22,21 @@ public class Barometer {
     float altitudeBarometric = 0;
     float altitudeBarometricRecent = 0;
 
+    public  Barometer(MainActivity argActivity) {
+        main = argActivity;
+    }
+
+    public void startBarometer() {
+
+        snsMgr = (SensorManager) main.getSystemService(Service.SENSOR_SERVICE);
+        barometer = snsMgr.getDefaultSensor(Sensor.TYPE_PRESSURE);
+        snsMgr.registerListener(main, barometer, SensorManager.SENSOR_DELAY_UI);
+    }
+
     /** Takes GPS altitude and measured barometric pressure, returns pressure at sea level */
     public static float getSealevelPressure(float alt, float p) {
         float sealevel = (float) (p / Math.pow(1 - (alt / 44330.0f), 5.255f));
         return sealevel;
-    }
-
-    public void startBarometer(MainActivity argActivity) {
-        main = argActivity;
-        snsMgr = (SensorManager) main.getSystemService(Service.SENSOR_SERVICE);
-        barometer = snsMgr.getDefaultSensor(Sensor.TYPE_PRESSURE);
-        snsMgr.registerListener(main, barometer, SensorManager.SENSOR_DELAY_UI);
     }
 
     public void calculateAltitude(SensorEvent event) {
@@ -41,17 +44,14 @@ public class Barometer {
         pressureBarometricRecent = values[0];
         altitudeBarometric = SensorManager.getAltitude(pressure_mean_sealevel, values[0]);
 
-        if (main.autopilot.fakeAltitude && main.seekbarTEST != null) {
-            /** for testing, takes value from seek bar */
-            //main.locObject.recentLocation.setAltitude(100 + main.seekbarTEST.getProgress());
-            altitudeBarometricRecent = 100 + main.seekbarTEST.getProgress();
-        } else {
-            /** sends altitude feedback and updates recent value only if difference is greater than 0.5m */
-            if (altitudeBarometric < altitudeBarometricRecent - 0.5 || altitudeBarometric > altitudeBarometricRecent + 0.5) {
-                Thread feedbackBarometer = new Thread(new Wrap());
-                feedbackBarometer.start();
-                altitudeBarometricRecent = altitudeBarometric;
-            }
+        /** for testing, takes value from seek bar */
+        if (main.autopilot.fakeAltitude == false && main.seekbarTEST == null) {
+                /** sends altitude feedback and updates recent value only if difference is greater than 0.2 m */
+                if (altitudeBarometric < altitudeBarometricRecent - 0.2 || altitudeBarometric > altitudeBarometricRecent + 0.2) {
+                    Thread feedbackBarometer = new Thread(new Wrap());
+                    feedbackBarometer.start();
+                    altitudeBarometricRecent = altitudeBarometric;
+                }
         }
 
         if (main.locObject.recentLocation != null) {

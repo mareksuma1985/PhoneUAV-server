@@ -10,9 +10,14 @@ public class Gravity {
     public Sensor sensorInstanceGrav;
     MainActivity main;
     SensorManager gravitySensorManager;
+    double angle_roll_rads, angle_pitch_rads;
     double angle_roll, angle_pitch;
     float[] gravityVectorDevice = new float[3];
     float[] gravityVectorVehicle = new float[3];
+
+    public  Gravity(MainActivity argActivity) {
+        main = argActivity;
+    }
 
     public void processGravity(SensorEvent event) {
         /** Processes data from gravity sensor event. */
@@ -41,6 +46,13 @@ public class Gravity {
             Thread feedback = new Thread(new Wrap());
             feedback.start();
 
+            /** in radians */
+            angle_roll_rads = Math.atan2((double) gravityVectorVehicle[0], (double) gravityVectorVehicle[2]);
+            angle_pitch_rads = Math.atan2((double) gravityVectorVehicle[1], (double) gravityVectorVehicle[2]);
+
+            main.mavLink.sendAttitude((float) -angle_roll_rads, (float) angle_pitch_rads);
+
+            /** in degrees */
             angle_roll = Math.toDegrees(Math.atan2((double) gravityVectorVehicle[0], (double) gravityVectorVehicle[2]));
             angle_pitch = Math.toDegrees(Math.atan2((double) gravityVectorVehicle[1], (double) gravityVectorVehicle[2]));
 
@@ -53,11 +65,11 @@ public class Gravity {
         }
     }
 
-    public void startGravity(MainActivity activityArgument) {
-        main = activityArgument;
+    public void startGravity() {
         gravitySensorManager = (SensorManager) main.getSystemService(Context.SENSOR_SERVICE);
         if (gravitySensorManager.getDefaultSensor(Sensor.TYPE_GRAVITY) != null) {
             sensorInstanceGrav = gravitySensorManager.getDefaultSensor(Sensor.TYPE_GRAVITY);
+            //SENSOR_DELAY_NORMAL, SENSOR_DELAY_UI, SENSOR_DELAY_GAME, SENSOR_DELAY_FASTEST
             gravitySensorManager.registerListener(main, sensorInstanceGrav, SensorManager.SENSOR_DELAY_GAME);
         } else {
             Log.d("onCreate", "Gravity sensor error!");

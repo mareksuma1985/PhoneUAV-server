@@ -247,7 +247,13 @@ public class SettingsActivity extends PreferenceActivity {
             bindPreferenceSummaryToValue(findPreference("protocol"));
             bindPreferenceSummaryToValue(findPreference("server-port"));
             bindPreferenceSummaryToValue(findPreference("server-path"));
+            /*
+            bindPreferenceSummaryToValue(findPreference("email-smtp-host"));
+            bindPreferenceSummaryToValue(findPreference("email-smtp-port"));
+            bindPreferenceSummaryToValue(findPreference("email-from"));
+            bindPreferenceSummaryToValue(findPreference("email-password"));
             bindPreferenceSummaryToValue(findPreference("email-list"));
+            */
         }
 
         @Override
@@ -261,3 +267,4 @@ public class SettingsActivity extends PreferenceActivity {
         }
     }
 }
+

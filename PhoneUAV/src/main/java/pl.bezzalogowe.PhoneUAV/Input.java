@@ -4,7 +4,6 @@ import android.os.Build;
 import android.os.Message;
 import android.util.Log;
 
-import java.util.Arrays;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
@@ -57,7 +56,7 @@ public class Input {
                     new Thread() {
                         public void run() {
                             msg.arg1 = 1;
-                            main.handlerRecord.sendMessage(msg);
+                            main.camObjectLolipop.handlerRecord.sendMessage(msg);
                         }
                     }.start();
                 } catch (Exception e) {
@@ -70,7 +69,7 @@ public class Input {
                     new Thread() {
                         public void run() {
                             msg.arg1 = 0;
-                            main.handlerRecord.sendMessage(msg);
+                            main.camObjectLolipop.handlerRecord.sendMessage(msg);
                         }
                     }.start();
                 } catch (Exception e) {
@@ -271,7 +270,7 @@ maximum value is 32767 (2^15 -1)
         controllerY2value = value;
         main.ele = (int) (-controllerY2value / 32.767 + 1500);
 
-        if (main.autopilot.stabilize_pitch == false) {
+        if (main.autopilot.hold_pitch == false) {
             if (main.outputMode == main.USC16) {
                 main.ch340commObject.SetPositionPrecisely(main.outputsElevator, -controllerY2value, 100, main.ch340commObject.servoElevatorMin, main.ch340commObject.servoElevatorMax);
             } else if (main.outputMode == main.FT311D_PWM) {
@@ -323,27 +322,28 @@ maximum value is 32767 (2^15 -1)
         elevonRight = x + y;
 
         if (elevonLeft > 32767)
-            elevonLeft = 32767;
+        {elevonLeft = 32767;}
         if (elevonLeft < -32767)
-            elevonLeft = -32767;
+        {elevonLeft = -32767;}
 
         if (elevonRight > 32767)
-            elevonRight = 32767;
+        {elevonRight = 32767;}
         if (elevonRight < -32767)
-            elevonRight = -32767;
+        {elevonRight = -32767;}
 
-        if (main.outputMode == main.FT311D_UART) {
-            //TODO: test
-            main.sk18commObject.SetPosition((byte) main.outputsElevonLeft[0], (int) ((elevonLeft / 32.767) + 1500), (byte) 20);
-            main.sk18commObject.SetPosition((byte) main.outputsElevonRight[0], (int) ((elevonRight / 32.767) + 1500), (byte) 20);
-        } else {
-            /** one servo at a time */
+        if (main.outputMode == main.USC16) {
+/** one servo at a time */
         /*
             main.ch340commObject.SetPositionPrecisely(main.outputsElevonLeft, elevonLeft, 100, main.ch340commObject.servoElevonMin, main.ch340commObject.servoElevonMax);
             main.ch340commObject.SetPositionPrecisely(main.outputsElevonRight, elevonRight, 100, main.ch340commObject.servoElevonMin, main.ch340commObject.servoElevonMax);
         */
-            /** both servos at the same time */
+/** both servos at the same time */
             main.ch340commObject.SetPositionsPrecisely(main.outputsElevonLeft, elevonLeft, main.outputsElevonRight, elevonRight, 100, main.ch340commObject.servoElevonMin, main.ch340commObject.servoElevonMax);
+        }
+           else if (main.outputMode == main.FT311D_UART) {
+            //TODO: test
+            main.sk18commObject.SetPosition((byte) main.outputsElevonLeft[0], (int) ((elevonLeft / 32.767) + 1500), (byte) 20);
+            main.sk18commObject.SetPosition((byte) main.outputsElevonRight[0], (int) ((elevonRight / 32.767) + 1500), (byte) 20);
         }
     }
 
@@ -485,7 +485,7 @@ if (!main.camAPIobjectKitkat.isRecording)
                             new Thread() {
                                 public void run() {
                                     msg.arg1 = 1;
-                                    main.handlerTorch.sendMessage(msg);
+                                    main.camObjectLolipop.handlerTorch.sendMessage(msg);
                                 }
                             }.start();
                         } catch (Exception e) {
@@ -508,9 +508,9 @@ if (!main.camAPIobjectKitkat.isRecording)
                     break;
                 case 12:
                     // DS4 right knob press
-                    //TODO: test it
+                    //TODO:
                     //main.sendTelemetry((byte) 12, true);
-                    main.ch340commObject.open(main);
+                    //main.ch340commObject.open();
                     break;
                 /** DualShock 4 has 13 buttons (0 through 12) */
                 case 13:
@@ -562,7 +562,7 @@ if (!main.camAPIobjectKitkat.isRecording)
                             new Thread() {
                                 public void run() {
                                     msg.arg1 = 0;
-                                    main.handlerTorch.sendMessage(msg);
+                                    main.camObjectLolipop.handlerTorch.sendMessage(msg);
                                 }
                             }.start();
                         } catch (Exception e) {
@@ -582,9 +582,9 @@ if (!main.camAPIobjectKitkat.isRecording)
                 case 11:
                     break;
                 case 12:
-                    //TODO: add separate method for closing
+                    //TODO:
                     //main.sendTelemetry((byte) 12, false);
-                    main.ch340commObject.open(main);
+                    //main.ch340commObject.close();
                     break;
                 /** DualShock 4 has 13 buttons (0 through 12) */
                 case 13:
@@ -721,13 +721,20 @@ if (!main.camAPIobjectKitkat.isRecording)
                 e.printStackTrace();
                 Log.d(TAG, "Reset FT311D error: " + e);
             }
-        } else if (data[0] == 0x33) {
+        } else if (data[0] == 0x32) {
+            /* decimal 50 */
+            //TODO stop heartheat?
+            System.out.println("Pinging remote address stopped");
+        }
+        else if (data[0] == 0x33) {
             /* decimal 51 */
-            byte[] ipAddr = new byte[]{data[1], data[2], data[3], data[4]};
-            //main.pingacz.startPinging(ipAddr);
-            System.out.println("Remote address: " + (int) data[1] + " ," + (int) data[2] + " ," + (int) data[3] + " ," + (int) data[4]);
-        } else if (data[0] == 0x34) {
-            /* decimal 52 - add waypoint */
+            //byte[] ipAddr = new byte[]{data[1], data[2], data[3], data[4]};
+            //TODO start heartbeat ipAddr?
+            System.out.println("Pinging remote machine started, video device: " + data[5]);
+        }
+        /*
+        // decimal 52 - add waypoint
+        else if (data[0] == 0x34) {
             byte[] header = new byte[]{data[0], data[1], data[2], data[3]};
             byte[] lat_array = new byte[]{data[4], data[5], data[6], data[7], data[8], data[9], data[10], data[11]};
             byte[] lon_array = new byte[]{data[12], data[13], data[14], data[15], data[16], data[17], data[18], data[19]};
@@ -742,14 +749,16 @@ if (!main.camAPIobjectKitkat.isRecording)
             double ele = main.locObject.bytesArray2Double(ele_array);
 
             main.locObject.addWaypoint(lat, lon, ele);
-        } else if (data[0] == 0x35) {
-            /* decimal 53 - skip waypoint */
+        }
+        */
+        /*
+        // decimal 53 - skip waypoint
+        else if (data[0] == 0x35) {
             byte[] header = new byte[]{data[0], data[1], data[2], data[3]};
-
             main.update.updateConversationHandler.post(new updateTextThread(main.text_server, Arrays.toString(header)));
-
             main.locObject.nextWaypoint();
         }
+        */
         /** add more types of datagrams here */
     }
 }

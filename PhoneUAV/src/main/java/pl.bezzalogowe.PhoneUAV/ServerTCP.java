@@ -37,28 +37,10 @@ public class ServerTCP {
         main = argActivity;
     }
 
-    public static String getLocalIpAddress() {
-        try {
-            for (Enumeration<NetworkInterface> en = NetworkInterface.getNetworkInterfaces(); en.hasMoreElements(); ) {
-                NetworkInterface intf = en.nextElement();
-                for (Enumeration<InetAddress> enumIpAddr = intf
-                        .getInetAddresses(); enumIpAddr.hasMoreElements(); ) {
-                    InetAddress inetAddress = enumIpAddr.nextElement();
-                    if (!inetAddress.isLoopbackAddress()
-                            && inetAddress instanceof Inet4Address) {
-                        return inetAddress.getHostAddress();
-                    }
-                }
-            }
-        } catch (SocketException ex) {
-            ex.printStackTrace();
-        }
-        return null;
-    }
 
     public void displayAddress() {
-        if (getLocalIpAddress() != null) {
-            main.update.updateConversationHandler.post(new updateTextThread(main.text_server, getLocalIpAddress() + ":" + server_port + " \n"));
+        if (main.networkObject.getLocalIpAddress() != null) {
+            main.update.updateConversationHandler.post(new updateTextThread(main.text_server, main.networkObject.getLocalIpAddress() + ":" + server_port + " \n"));
         } else {
             main.text_server.setText("Offline");
         }

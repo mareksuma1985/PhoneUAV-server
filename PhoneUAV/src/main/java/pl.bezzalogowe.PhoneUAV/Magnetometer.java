@@ -17,6 +17,10 @@ public class Magnetometer {
     MainActivity main;
     SensorManager magnetometerManager;
 
+    public  Magnetometer(MainActivity argActivity) {
+        main = argActivity;
+    }
+
     public void calculateMagnetometer(SensorEvent event) {
 
         float[] magVectorDevice = new float[3];
@@ -36,6 +40,9 @@ public class Magnetometer {
         // TODO: doesn't take Z axis into account, should it?
         heading = ((Math.toDegrees(-Math.atan2((double) magVectorVehicle[0], (double) magVectorVehicle[1])) + magnetic_declination + 360) % 360);
 
+        //TODO: make a method for radians
+        main.mavLink.setHeadingDegrees(heading);
+
         if (main.locObject.waypointNext != null && main.locObject.recentLocation != null) {
             try {
                 main.magObject.azimuth = (main.locObject.recentLocation.bearingTo(main.locObject.waypointNext) + 360) % 360;
@@ -45,8 +52,7 @@ public class Magnetometer {
         }
     }
 
-    public void startMagnetometer(MainActivity argActivity) {
-        main = argActivity;
+    public void startMagnetometer() {
         magnetometerManager = (SensorManager) main.getSystemService(Context.SENSOR_SERVICE);
         if (magnetometerManager.getDefaultSensor(Sensor.TYPE_MAGNETIC_FIELD) != null) {
 

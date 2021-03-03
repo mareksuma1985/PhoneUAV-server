@@ -1,7 +1,9 @@
 package pl.bezzalogowe.PhoneUAV;
 
+import android.Manifest;
 import android.app.Activity;
 import android.app.AlertDialog;
+import android.app.Dialog;
 import android.app.PendingIntent;
 import android.content.BroadcastReceiver;
 import android.content.Context;
@@ -20,15 +22,16 @@ import android.hardware.usb.UsbAccessory;
 import android.hardware.usb.UsbDevice;
 import android.hardware.usb.UsbManager;
 import android.net.Uri;
-import android.net.wifi.WifiInfo;
-import android.net.wifi.WifiManager;
+import android.os.BatteryManager;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Message;
 import android.preference.PreferenceManager;
 import android.support.v4.app.ActivityCompat;
+import android.support.v4.content.ContextCompat;
 import android.util.Log;
+import android.view.KeyEvent;
 import android.view.Menu;
 import android.view.MenuInflater;
 import android.view.MenuItem;
@@ -42,6 +45,7 @@ import android.widget.CompoundButton;
 import android.widget.LinearLayout;
 import android.widget.SeekBar;
 import android.widget.TextView;
+import android.widget.Toast;
 
 import java.io.DataOutputStream;
 import java.io.IOException;
@@ -49,14 +53,15 @@ import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Timer;
 import java.util.TimerTask;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
+
+import pl.bezzalogowe.mavlink.*;
 
 public class MainActivity extends Activity implements SensorEventListener {
     final MainActivity main = this;
     final int FORMAT_ASCII = 0;
     final int FORMAT_HEX = 1;
     final int FORMAT_DEC = 2;
+    final int REQUEST_CODE = 200;
     /* declare FT311 interface variables */
     public FT311PWMInterface pwmInterface;
     public FT311UARTInterface uartInterface;
@@ -69,8 +74,9 @@ public class MainActivity extends Activity implements SensorEventListener {
     ServerUDP serverUDP = new ServerUDP(main);
     ServerTCP serverTCP = new ServerTCP(main);
 
-    NetworkPing pingacz = new NetworkPing(main);
-    UpdateUI update = new UpdateUI();
+    public UpdateUI update = new UpdateUI();
+    public UpdateFromOutsideThread updateOutside = new UpdateFromOutsideThread();
+
     final Handler handler = new Handler() {
         @Override
         public void handleMessage(Message msg) {
@@ -86,30 +92,37 @@ public class MainActivity extends Activity implements SensorEventListener {
     PendingIntent mPermissionIntent;
     CH340comm ch340commObject;
     /* API≤20 */
-    CameraAPI camObjectKitkat = new CameraAPI();
+    CameraAPI camObjectKitkat = new CameraAPI(this);
     /* API>20 */
-    Camera2API camObjectLolipop = new Camera2API();
+    Camera2API camObjectLolipop = new Camera2API(this);
     /* camera number */
     String cameraID;
     double[] device_orientation = new double[3];
-    Accelerometer accObject = new Accelerometer();
-    Gravity gravityObject = new Gravity();
-    Magnetometer magObject = new Magnetometer();
-    Barometer pressureObject = new Barometer();
-    Location locObject = new Location();
-    LogGPX logObject = new LogGPX();
+    Accelerometer accObject = new Accelerometer(this);
+    Gravity gravityObject = new Gravity(this);
+    Magnetometer magObject = new Magnetometer(this);
+    Barometer pressureObject = new Barometer(this);
+    Location locObject = new Location(this);
+    LogGPX logObject = new LogGPX(this);
     // saves trackpoints to csv file
     // LogCSV logObject = new LogCSV();
+    LogSRT logSubRip = new LogSRT(this);
+
     Autopilot autopilot = new Autopilot();
+    MAVLinkClass mavLink = new MAVLinkClass(this);
+    NetworkInformation networkObject = new NetworkInformation(this);
+
     String serverpath;
     /* layout components */
     TextView dutyCycleRDR, dutyCycleAIL, dutyCycleELEV, dutyCycleTHROT, dutyCycleELEV_L, dutyCycleELEV_R, dutyCycleTEST,
             axis_text_x, axis_text_y, axis_text_z,
-            angle_text_pitch, angle_text_roll, angle_text_heading, altitude_text, text_server, text_feedback;
+            angle_text_pitch, angle_text_roll, angle_text_heading, altitude_text, text_server;
+    public TextView text_feedback;
     Button resetButton, usbButton, torchButton, photoButton, videoButton;
     Button startPWMminButton, startPWMmaxButton, throttleUpButton, throttleDownButton, throttleStopButton;
     Button throttleMinButton, throttleMaxButton;
     CheckBox checkboxAutopilotFeature1, checkboxAutopilotFeature2;
+    SharedPreferences settings;
     int period;
     byte outputMode, protocol;
     /* needed for USB device permission */
@@ -125,8 +138,10 @@ public class MainActivity extends Activity implements SensorEventListener {
                             main.update.updateConversationHandler.post(new updateTextThread(main.text_server, "permission granted to " + device.getProductName()));
                             /** set up device communication */
                             try {
-                                ch340commObject.open(main);
+                                ch340commObject.open();
                             } catch (Exception e) {
+                                main.logObject.saveComment("error: " + e.toString());
+
                                 e.printStackTrace();
                             }
                         }
@@ -137,7 +152,7 @@ public class MainActivity extends Activity implements SensorEventListener {
             }
         }
     };
-    SeekBar seekbarRDR, seekbarAIL, seekbarELEV, seekbarTHROT, seekbarELEV_L, seekbarELEV_R, seekbarTEST;
+    public SeekBar seekbarRDR, seekbarAIL, seekbarELEV, seekbarTHROT, seekbarELEV_L, seekbarELEV_R, seekbarTEST;
     /**
      * USC-16: output channels for each control surface
      * You can use more than one servo per surface
@@ -154,32 +169,6 @@ public class MainActivity extends Activity implements SensorEventListener {
     int ail, ele, thr, rdr, flaps;
     int elevatorTrim = 0;
     int rudderTrim = 0;
-    Handler handlerRecord = new Handler(new Handler.Callback() {
-        @Override
-        public boolean handleMessage(Message msg) {
-            if (msg.arg1 == 1) {
-                main.camObjectLolipop.startRecord();
-            } else {
-                main.camObjectLolipop.stopRecord();
-            }
-            return false;
-        }
-    });
-    Handler handlerTorch = new Handler(new Handler.Callback() {
-        @Override
-        public boolean handleMessage(Message msg) {
-            if (msg.arg1 == 1) {
-                camObjectLolipop.turnOnTorch();
-                torchButton.setTextColor(Color.rgb(255, 255, 255));
-                camObjectLolipop.torch = true;
-            } else {
-                camObjectLolipop.turnOffTorch();
-                torchButton.setTextColor(Color.rgb(0, 0, 0));
-                camObjectLolipop.torch = false;
-            }
-            return false;
-        }
-    });
 
     public static void powerOTG(boolean flipBool) {
         /** http://stackoverflow.com/questions/20932102/execute-shell-command-from-android */
@@ -209,25 +198,24 @@ public class MainActivity extends Activity implements SensorEventListener {
     /* Called when the activity is first created. */
     public void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+
         setContentView(R.layout.main);
 
         if (Build.VERSION.SDK_INT >= 23) {
             askPermissions();
         }
 
-        int result = getApplicationContext().checkCallingPermission("android.permission.INTERNET");
+        int result = getApplicationContext().checkCallingPermission(Manifest.permission.INTERNET);
         if (result == PackageManager.PERMISSION_GRANTED) {
             Log.d("permissions", "Internet granted");
-            //Toast.makeText(this, "Permission granted to INTERNET", Toast.LENGTH_SHORT).show();
         } else if (result == PackageManager.PERMISSION_DENIED) {
             Log.d("permissions", "Internet denied");
-            //Toast.makeText(this, "Permission DENIED to INTERNET", Toast.LENGTH_SHORT).show();
         }
 
 /** Path to preferences file: /data/data/pl.bezzalogowe.PhoneUAV/shared_prefs/
  Root privilege required to create or modify file by hand */
 
-        SharedPreferences settings = PreferenceManager.getDefaultSharedPreferences(main);
+        settings = PreferenceManager.getDefaultSharedPreferences(main);
 
 /** https://www.ef3m.pl/pl/blog/Nadajnik-i-odbiornik-2,4GHz/12 */
 
@@ -242,7 +230,7 @@ public class MainActivity extends Activity implements SensorEventListener {
         outputsFlaperonLeft = getOutputs("outputs-flaperon-left", "9");
         outputsFlaperonRight = getOutputs("outputs-flaperon-right", "10");
 
-        autopilot.proportional = Double.valueOf(settings.getString("autopilot-proportional", "1"));
+        autopilot.proportional = Double.valueOf(settings.getString("autopilot-proportional", "200"));
         autopilot.integral = Double.valueOf(settings.getString("autopilot-integral", "0"));
         autopilot.derivative = Double.valueOf(settings.getString("autopilot-derivative", "0"));
 
@@ -291,17 +279,6 @@ public class MainActivity extends Activity implements SensorEventListener {
 
         try {
             serverpath = settings.getString("server-path", "http://bezzalogowe.pl/uav/");
-        } catch (NumberFormatException e) {
-            e.printStackTrace();
-        }
-
-        /** e-mail recipients separated with commas or semicolons */
-
-        try {
-            camObjectLolipop.toEmails = settings.getString("email-list", "msuma@wp.pl");
-            if (camObjectLolipop.toEmails != "") {
-                camObjectLolipop.toEmailList = Arrays.asList(camObjectLolipop.toEmails.split("\\s*[,;]\\s*"));
-            }
         } catch (NumberFormatException e) {
             e.printStackTrace();
         }
@@ -459,6 +436,8 @@ public class MainActivity extends Activity implements SensorEventListener {
         }
 
         update.updateConversationHandler = new Handler();
+        updateOutside.updateConversationHandler = new Handler();
+
         pwmInterface = new FT311PWMInterface(this);
         resetFT311();
         sk18commObject = new SK18comm();
@@ -467,7 +446,7 @@ public class MainActivity extends Activity implements SensorEventListener {
         uartInterface = new FT311UARTInterface(this, sharePrefSettings);
         initiateFT311();
 
-        ch340commObject = new CH340comm();
+        ch340commObject = new CH340comm(this);
 
         /* needed for USB device permission */
         mPermissionIntent = PendingIntent.getBroadcast(this, 0, new Intent(ch340commObject.ACTION_USB_PERMISSION), 0);
@@ -484,14 +463,14 @@ public class MainActivity extends Activity implements SensorEventListener {
         serverTCP.server_port = Integer.valueOf(settings.getString("server-port", "6000"));
         period = Integer.valueOf(settings.getString("period", "3"));
 
-        ch340commObject.servoElevatorMin = Integer.valueOf(settings.getString("servo-elevator-min", "800"));
-        ch340commObject.servoElevatorMax = Integer.valueOf(settings.getString("servo-elevator-max", "2200"));
+        ch340commObject.servoElevatorMin = Integer.valueOf(settings.getString("servo-elevator-min", "700")); //800
+        ch340commObject.servoElevatorMax = Integer.valueOf(settings.getString("servo-elevator-max", "2300")); //2200
 
-        ch340commObject.servoRudderMin = Integer.valueOf(settings.getString("servo-rudder-min", "740"));
-        ch340commObject.servoRudderMax = Integer.valueOf(settings.getString("servo-rudder-max", "2260"));
+        ch340commObject.servoRudderMin = Integer.valueOf(settings.getString("servo-rudder-min", "500")); //740
+        ch340commObject.servoRudderMax = Integer.valueOf(settings.getString("servo-rudder-max", "2500")); //2260
 
-        ch340commObject.servoElevonMin = Integer.valueOf(settings.getString("servo-elevon-min", "483"));
-        ch340commObject.servoElevonMax = Integer.valueOf(settings.getString("servo-elevon-max", "2443"));
+        ch340commObject.servoElevonMin = Integer.valueOf(settings.getString("servo-elevon-min", "500")); //483
+        ch340commObject.servoElevonMax = Integer.valueOf(settings.getString("servo-elevon-max", "2500")); //2443
 
         ch340commObject.throttleMin = Integer.valueOf(settings.getString("throttle-min", "1000"));
         ch340commObject.throttleMax = Integer.valueOf(settings.getString("throttle-max", "2000"));
@@ -524,20 +503,34 @@ public class MainActivity extends Activity implements SensorEventListener {
         Log.d("pressure-mean-sealevel", "read: " + pressureObject.pressure_mean_sealevel);
 
         inputObject.startController(this);
-        accObject.startAccelerometer(this);
-        gravityObject.startGravity(this);
-        magObject.startMagnetometer(this);
-        pressureObject.startBarometer(this);
-        locObject.startLocation(this);
-        logObject.startLog(this);
+        accObject.startAccelerometer();
+        gravityObject.startGravity();
+        magObject.startMagnetometer();
+        pressureObject.startBarometer();
+        locObject.startLocation();
+        logObject.startLog();
 
-        if (Build.VERSION.SDK_INT <= 20 /*Build.VERSION_CODES.KITKAT_WATCH*/) {
-            /* API≤20 */
-            setupButtonsKitkat();
+        mavLink.classInit();
+        mavLink.receiveInit();
+        mavLink.heartBeatInit();
+
+        this.registerReceiver(this.mBatInfoReceiver, new IntentFilter(Intent.ACTION_BATTERY_CHANGED));
+
+        if (camObjectLolipop.hasCameraPermission()) {
+            if (Build.VERSION.SDK_INT <= 20 /*Build.VERSION_CODES.KITKAT_WATCH*/) {
+                /* API≤20 */
+                camObjectKitkat.cameraInit();
+            } else {
+                /* API>20 */
+                //TODO: make the method return true on success, false if something goes wrong
+                camObjectLolipop.cameraInit();
+                camObjectLolipop.cameraInitialised = true;
+            }
         } else {
-            /* API≥20 */
-            setupButtonsLolipop();
+            ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.CAMERA}, REQUEST_CODE);
+            show_permissions_dialog();
         }
+
         setupWidgets();
         serverTCP.displayAddress();
     }
@@ -566,7 +559,7 @@ public class MainActivity extends Activity implements SensorEventListener {
                 powerToUSB();
                 break;
             case R.id.get_info:
-                getInfo();
+                networkObject.showInfo();
                 break;
             case R.id.toggle_alt_spoof:
                 toggle_altitude_spoofing();
@@ -576,6 +569,9 @@ public class MainActivity extends Activity implements SensorEventListener {
                 break;
             case R.id.help:
                 openPage();
+                break;
+            case R.id.close:
+                onBackPressed();
                 break;
             default:
                 break;
@@ -696,6 +692,7 @@ public class MainActivity extends Activity implements SensorEventListener {
     @Override
     public void onStart() {
         super.onStart();
+        camObjectLolipop.cameraResume();
     }
 
     @Override
@@ -703,38 +700,6 @@ public class MainActivity extends Activity implements SensorEventListener {
         // Ideally should implement onResume() and onPause() to take appropriate action when the activity looses focus
         Log.d("called", "onResume");
         super.onResume();
-
-        /*
-         accObject.accelerometerManager.registerListener(this,
-		 accObject.sensorInstanceAcc, SensorManager.SENSOR_DELAY_NORMAL);
-		 magObject.magnetometerManager.registerListener(this,
-		 magObject.sensorInstanceMag, SensorManager.SENSOR_DELAY_NORMAL);
-		 */
-
-        if (Build.VERSION.SDK_INT <= 20 /* Build.VERSION_CODES.KITKAT_WATCH */) {
-            //camObjectKitkat.setListener(this);
-        } else {
-            /* API>20 */
-            if (camObjectLolipop.mPreviewCaptureSession == null) {
-                // Preview not initialized
-                camObjectLolipop.setListener(this);
-                camObjectLolipop.startCameraThread();
-                if (camObjectLolipop.mTextureView.isAvailable()) {
-                    Log.d("camera", "surface IS available");
-                    camObjectLolipop.setupCamera();
-                } else {
-                    Log.d("camera", "surface IS NOT yet available");
-                    try {
-                        camObjectLolipop.cameraManager = (android.hardware.camera2.CameraManager) getSystemService(CAMERA_SERVICE);
-                    } catch (Exception e) {
-                        Log.d("camera", "manager: " + e.toString());
-                    }
-                }
-            } else {
-                // Preview initialized, un-hides preview
-                camObjectLolipop.mTextureView.setVisibility(View.VISIBLE);
-            }
-        }
     }
 
     @Override
@@ -742,30 +707,14 @@ public class MainActivity extends Activity implements SensorEventListener {
         // Ideally should implement onResume() and onPause() to take appropriate
         // action when the activity looses focus
         Log.d("called", "onPause");
-
-        if (Build.VERSION.SDK_INT <= 20 /* Build.VERSION_CODES.KITKAT_WATCH */) {
-        } else {
-            /* API>20 */
-            if (camObjectLolipop.mPreviewCaptureSession == null) {
-                // Preview not initialized, improbable situation
-                camObjectLolipop.closeActiveCamera();
-                camObjectLolipop.stopCameraThread();
-            } else {
-                // Preview initialized, hides preview
-                camObjectLolipop.mTextureView.setVisibility(View.INVISIBLE);
-            }
-        }
         super.onPause();
-        /*
-         accObject.accelerometerManager.unregisterListener(this);
-		 magObject.magnetometerManager.unregisterListener(this);
-		 */
     }
 
     @Override
     protected void onStop() {
         Log.d("called", "onStop");
         super.onStop();
+        camObjectLolipop.cameraPause();
     }
 
     @Override
@@ -796,80 +745,15 @@ public class MainActivity extends Activity implements SensorEventListener {
         // do nothing
     }
 
-    private void setupButtonsKitkat() {
-        camObjectKitkat.mTextureView = (TextureView) this.findViewById(R.id.preview);
-
-        torchButton.setOnClickListener(new OnClickListener() {
-            public void onClick(View v) {
-                if (camObjectKitkat.torch) {
-                    camObjectKitkat.turnOffTorch();
-                    torchButton.setTextColor(Color.rgb(255, 255, 255));
-                } else {
-                    camObjectKitkat.turnOnTorch();
-                    torchButton.setTextColor(Color.rgb(0, 0, 0));
-                }
-            }
-        });
-
-        photoButton.setOnClickListener(new OnClickListener() {
-            public void onClick(View v) {
-                camObjectKitkat.captureImage(false);
-            }
-        });
-
-        videoButton.setOnClickListener(new OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                if (!camObjectKitkat.isRecording) {
-                    camObjectKitkat.captureVideoStart();
-                } else {
-                    camObjectKitkat.captureVideoStop();
-                }
-            }
-        });
-    }
-
-    private void setupButtonsLolipop() {
-        camObjectLolipop.createVideoFolder();
-        camObjectLolipop.createImageFolder();
-
-        camObjectLolipop.mTextureView = (TextureView) main.findViewById(R.id.preview);
-
-        torchButton.setOnClickListener(new OnClickListener() {
-            public void onClick(View v) {
-                if (camObjectLolipop.torch) {
-                    camObjectLolipop.turnOffTorch();
-                    torchButton.setTextColor(Color.rgb(255, 255, 255));
-                } else {
-                    camObjectLolipop.turnOnTorch();
-                    torchButton.setTextColor(Color.rgb(0, 0, 0));
-                }
-            }
-        });
-
-        photoButton.setOnClickListener(new OnClickListener() {
-            public void onClick(View v) {
-                camObjectLolipop.captureImage();
-            }
-        });
-
-        videoButton.setOnClickListener(new OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                if (!camObjectLolipop.isRecording) {
-                    camObjectLolipop.startRecord();
-                } else {
-                    camObjectLolipop.stopRecord();
-                }
-            }
-        });
-    }
 
     private void setupWidgets() {
         usbButton.setOnClickListener(new OnClickListener() {
             public void onClick(View v) {
-                //TODO: open/close
-                ch340commObject.open(main);
+                if (ch340commObject.isOpen) {
+                    ch340commObject.close();
+                } else {
+                    ch340commObject.open();
+                }
             }
         });
 
@@ -1139,58 +1023,6 @@ public class MainActivity extends Activity implements SensorEventListener {
         }).setNeutralButton(R.string.cancel, null).show();
     }
 
-    public void getInfo() {
-        //FIXME: Doesn't work on some phones
-        AlertDialog.Builder helpBuilder = new AlertDialog.Builder(this);
-        helpBuilder.setIcon(android.R.drawable.ic_dialog_info);
-        WifiManager wifi;
-        WifiInfo info;
-
-        String frequency, pattern;
-        int channelWLAN;
-
-        helpBuilder.setTitle("getInfo");
-
-        try {
-            /* WiFi information */
-            wifi = (WifiManager) getBaseContext().getSystemService(Context.WIFI_SERVICE);
-            info = wifi.getConnectionInfo();
-            //System.out.println(info.toString());
-
-            if (Build.VERSION.SDK_INT <= 20) {
-                pattern = "Frequency:\\s*(.*)";
-                Pattern r = Pattern.compile(pattern);
-                Matcher m = r.matcher(info.toString());
-                if (m.find()) {
-                    frequency = m.group(1);
-                } else {
-                    frequency = "";
-                }
-
-                /** http://en.wikipedia.org/wiki/List_of_WLAN_channels */
-                channelWLAN = ((Integer.valueOf(frequency) - 2412) / 5) + 1;
-
-                if (channelWLAN < 0)
-                    channelWLAN = 0;
-                helpBuilder.setMessage("Wi-Fi channel: " + channelWLAN + info.toString().replace(", ", "\n"));
-            } else {
-                helpBuilder.setMessage("Wi-Fi frequency: " + info.getFrequency() + info.FREQUENCY_UNITS + "\n" +
-                        "Strength: " + info.getRssi() + "dBm\n" +
-                        "SSID: " + info.getSSID());
-            }
-
-            helpBuilder.setPositiveButton(R.string.ok, new DialogInterface.OnClickListener() {
-                public void onClick(DialogInterface dialog, int which) {
-                }
-            });
-        } catch (NumberFormatException e) {
-            e.printStackTrace();
-        }
-
-        AlertDialog helpDialog = helpBuilder.create();
-        helpDialog.show();
-    }
-
     @Override
     public void onBackPressed() {
         new AlertDialog.Builder(this).setIcon(android.R.drawable.ic_menu_close_clear_cancel)
@@ -1204,9 +1036,43 @@ public class MainActivity extends Activity implements SensorEventListener {
                 }).setNegativeButton(R.string.no, null).show();
     }
 
+    /** https://stackoverflow.com/a/12764310 */
+    /**
+     * https://code.tutsplus.com/tutorials/android-sdk-intercepting-physical-key-events--mobile-10379
+     */
+    @Override
+    public boolean dispatchKeyEvent(KeyEvent event) {
+        int action = event.getAction();
+        int keyCode = event.getKeyCode();
+        switch (keyCode) {
+            case KeyEvent.KEYCODE_VOLUME_UP:
+                if (action == KeyEvent.ACTION_DOWN) {
+                    //TODO
+                    main.update.updateConversationHandler.post(new updateToastThread(this, "Volume up"));
+                }
+                return true;
+            case KeyEvent.KEYCODE_VOLUME_DOWN:
+                if (action == KeyEvent.ACTION_DOWN) {
+                    //TODO
+                    main.update.updateConversationHandler.post(new updateToastThread(this, "Volume down"));
+                }
+                return true;
+            case KeyEvent.KEYCODE_HOME:
+                if (action == KeyEvent.ACTION_DOWN) {
+                    //TODO
+                    main.update.updateConversationHandler.post(new updateToastThread(this, "Home"));
+                }
+                return true;
+            default:
+                return super.dispatchKeyEvent(event);
+        }
+    }
+
     private void closeApplication() {
         logObject.stopLog();
 
+        mavLink.heartBeatStop();
+        mavLink.receiveStop();
         /** disables flash */
         if (Build.VERSION.SDK_INT <= 20 /*Build.VERSION_CODES.KITKAT_WATCH*/) {
             try {
@@ -1243,7 +1109,7 @@ public class MainActivity extends Activity implements SensorEventListener {
 
         editor.commit();
 
-        //TODO: Must actually close activity and app
+        /** Must actually close activity and app */
         finish();
         System.exit(0);
     }
@@ -1270,8 +1136,51 @@ public class MainActivity extends Activity implements SensorEventListener {
                 "android.permission.ACCESS_FINE_LOCATION",
                 "android.permission.READ_PHONE_STATE"
         };
-        int requestCode = 200;
-        ActivityCompat.requestPermissions(this, permissions, requestCode);
+        ActivityCompat.requestPermissions(this, permissions, REQUEST_CODE);
+    }
+
+    public void show_permissions_dialog() {
+        new AlertDialog.Builder(this).setIcon(android.R.drawable.ic_dialog_alert)
+                .setTitle(getResources().getString(R.string.permission_title))
+                .setMessage(getResources().getString(R.string.permission_content))
+                .setNeutralButton("close", new Dialog.OnClickListener() {
+                    public void onClick(DialogInterface arg0, int arg1) {
+                        askPermissions();
+                    }
+                }).show();
+    }
+
+
+    public static final int REQUEST_CAMERA_PERMISSION_RESULT = 0;
+    public static final int REQUEST_WRITE_EXTERNAL_STORAGE_PERMISSION_RESULT = 1;
+
+    @Override
+    public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+        if (requestCode == REQUEST_CAMERA_PERMISSION_RESULT) {
+            if (grantResults[0] != PackageManager.PERMISSION_GRANTED) {
+                Toast.makeText(getApplicationContext(),
+                        "Application will not run without camera services", Toast.LENGTH_SHORT).show();
+            }
+            if (grantResults[1] != PackageManager.PERMISSION_GRANTED) {
+                Toast.makeText(getApplicationContext(),
+                        "Application will not have audio on record", Toast.LENGTH_SHORT).show();
+            }
+        }
+
+        if (requestCode == REQUEST_WRITE_EXTERNAL_STORAGE_PERMISSION_RESULT) {
+            if (grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+                /*if(mIsRecording || mIsTimelapse) {
+                    mIsRecording = true;
+                    mRecordImageButton.setImageResource(R.mipmap.btn_video_busy);
+                }*/
+                Toast.makeText(this,
+                        "Permission successfully granted!", Toast.LENGTH_SHORT).show();
+            } else {
+                Toast.makeText(this,
+                        "App needs to save video to run", Toast.LENGTH_SHORT).show();
+            }
+        }
     }
 
     public void appendData(String s) {
@@ -1285,8 +1194,10 @@ public class MainActivity extends Activity implements SensorEventListener {
                 update.updateConversationHandler.post(new updateTextThread(text_feedback, "Dec"));
             }
             break;
-
+/*
             case FORMAT_ASCII:
+            break;
+*/
             default:
                 update.updateConversationHandler.post(new updateTextThread(text_feedback, s.toString()));
                 break;
@@ -1472,6 +1383,17 @@ public class MainActivity extends Activity implements SensorEventListener {
             enable_altitude_spoofing();
         }
     }
+
+    /* https://stackoverflow.com/questions/3291655/get-battery-level-and-state-in-android */
+    private BroadcastReceiver mBatInfoReceiver = new BroadcastReceiver() {
+        @Override
+        public void onReceive(Context ctxt, Intent intent) {
+            /** sending battery voltage info */
+            int voltage = intent.getIntExtra(BatteryManager.EXTRA_VOLTAGE, 0); // Millivolts
+            int level = intent.getIntExtra(BatteryManager.EXTRA_LEVEL, 0); // percent
+            mavLink.setBattery(voltage, level);
+        }
+    };
 
     /**
      * USB input data handler

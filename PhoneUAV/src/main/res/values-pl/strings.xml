@@ -19,6 +19,7 @@
     <string name="get_info">getInfo</string>
     <string name="alt_spoof">Fałszywa wysokość</string>
     <string name="options">Opcje</string>
+    <string name="close">Zamknij</string>
     <string name="help">Pomoc</string>
     <string name="pref_period_title">Okres (PWM)</string>
     <string name="switch_orientation_title">Obróć</string>
@@ -32,6 +33,9 @@
     <string name="pref_throttle_min">Ciąg min</string>
     <string name="pref_throttle_max">Ciąg max</string>
 
+    <string name="show_ip">Pokaż IP</string>
+    <string name="show_info">Pokaż informacje o Wi-Fi</string>
+
     <string name="save_title">Zapisz</string>
     <string name="period_label">T (ms):</string>
 
@@ -40,6 +44,9 @@
 
     <string name="confirmation_title">Potwierdzenie</string>
     <string name="confirmation_msg">Czy na pewno zamknąć aplikację?</string>
+
+    <string name="permission_title">Podgląd kamery</string>
+    <string name="permission_content">Aplikacja musi być zrestartowana po udzieleniu dostępu do kamery.</string>
 
     <!-- Strings related to Settings -->
     <!-- General settings -->
@@ -70,7 +77,9 @@
     <string name="set_port_title">Port</string>
     <string name="set_port_msg">Wprowadź numer portu:</string>
     <string name="set_path_title">\u015Acie\u017Cka serwera</string>
-    <string name="set_email_title">Odbiorcy e-maili</string>
+    <string name="set_email_from">E-mail od</string>
+    <string name="set_email_password">E-mail password</string>
+    <string name="set_email_recipients">Odbiorcy e-maili</string>
 
     <!-- Example settings for Notifications -->
     <string name="pref_header_notifications">Powiadomienia</string>
